@@ -19,10 +19,21 @@ jobs:
       - name: Build modern debug APK
         run: gradle :app:assembleModernDebug --no-daemon
       - name: Package Magisk module
+        continue-on-error: true
         run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          AAPT2=$(find "$SDK/build-tools" -name aapt2 2>/dev/null | sort -V | tail -1)
+          if [ -z "$AAPT2" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0"
+            AAPT2=$(find "$SDK/build-tools" -name aapt2 | sort -V | tail -1)
+          fi
+          echo "Using $AAPT2"
+          export PATH="$(dirname "$AAPT2"):$PATH"
           chmod +x module/package.sh
           ./module/package.sh app/build/outputs/apk/modern/debug/app-modern-debug.apk IndividualAppAudioVolumeControl-magisk.zip
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: build
           path: |
