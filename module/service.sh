@@ -91,5 +91,32 @@ grant_perms_any_case() {
   done
 }
 
+# PACKAGE_USAGE_STATS is an appop-backed permission: "pm grant" cannot grant it,
+# only the OP_GET_USAGE_STATS appop mode controls access. The privapp allowlist
+# entry grants the permission at boot, and this makes the appop stick as
+# MODE_ALLOWED so the app appears in Settings > Usage access with access on.
+grant_usage_stats_appops() {
+  if ! command -v cmd >/dev/null 2>&1 && ! command -v appops >/dev/null 2>&1; then
+    return 0
+  fi
+
+  users="$(list_users)"
+  if [ -z "${users}" ]; then
+    users="0"
+  fi
+
+  for user_id in ${users}; do
+    if command -v cmd >/dev/null 2>&1; then
+      cmd appops set --user "${user_id}" "${PKG}" GET_USAGE_STATS allow >/dev/null 2>&1 || true
+      if cmd appops get --user "${user_id}" "${PKG}" GET_USAGE_STATS 2>/dev/null | grep -q 'allow'; then
+        log_note "usage access granted user=${user_id}"
+      else
+        log_note "usage access not granted user=${user_id} (toggle in Settings > Usage access)"
+      fi
+    fi
+  done
+}
+
 wait_for_boot
 grant_perms_any_case
+grant_usage_stats_appops

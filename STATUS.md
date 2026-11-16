@@ -13,6 +13,7 @@ Last update: 2026-03-22
 - Rules engine groundwork (storage + playback overrides).
 
 ## Latest work
+- Fixed the app never appearing in Settings > Usage access: the manifest did not declare `android.permission.PACKAGE_USAGE_STATS`, so the system usage-access panel never listed the app. Added the permission to the manifest (marked `tools:ignore="ProtectedPermissions"` so the privapp validator derives it) and to the module privapp allowlist, and added a post-boot `cmd appops set GET_USAGE_STATS allow` bootstrap to `module/service.sh` so the appop-backed grant sticks per user without a manual toggle. Verified: `assembleModernDebug` succeeds, merged APK badging shows the permission, and `scripts/validate-privapp-permissions.sh` passes against the updated allowlist.
 - Added a post-boot best-effort grant probe in `module/service.sh` that tries both `pm grant` and `cmd package grant` for `INTERACT_ACROSS_USERS(_FULL)` across detected users, then logs whether the permission is actually granted so KernelSU/Magisk installs can be diagnosed more concretely.
 - Fixed foreign-profile package resolution by resolving playback UIDs through the target user context when hidden `getClientPackageName()` is unavailable, which should let cross-profile `AudioPlaybackConfiguration` entries remain controllable instead of being dropped.
 - Clarified docs that root `dumpsys` fallback is detection-only and that actual cross-profile control on KernelSU Next still depends on the app being mounted as a privileged system app with `INTERACT_ACROSS_USERS(_FULL)`.
@@ -321,4 +322,4 @@ Last update: 2026-03-22
 - Added Manage Apps screen for adding packages or searching apps, keeping main list limited to saved apps.
 
 ## Last updated
-- 2026-03-22
+- 2026-11-17
