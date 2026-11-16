@@ -16,6 +16,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
+import android.media.AudioPlaybackConfiguration
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -45,7 +46,8 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.OverlayPrefs
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.MarkerStyle
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.DiagnosticsStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ForegroundAppResolver
-import android.graphics.drawable.Drawable
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AppIconLoader
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.withBiggerThumb
 import android.widget.Toast
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.OutputLabelUtils
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.ui.OverlayPermissionActivity
@@ -72,7 +74,7 @@ class VolumeOverlayService : Service() {
     private var controlsEnabled: Boolean = true
     private val lastNonZeroVolumes = mutableMapOf<String, Float>()
     private var lastShowReason: String = DiagnosticsStore.OVERLAY_SIGNAL_MANUAL
-    private val iconCache = mutableMapOf<String, Drawable>()
+    private var pollBackedOff: Boolean = false
 
     private val hideRunnable = Runnable {
         removeOverlay()
@@ -92,6 +94,13 @@ class VolumeOverlayService : Service() {
                     populateList()
                 }
             }
+            // The AudioPlaybackCallback already refreshes the list on real playback
+            // changes. This timer is only needed while the root audio fallback is in
+            // use, because dumpsys-only entries have no listener API; without it,
+            // stop polling entirely.
+            if (!PlaybackUtils.shouldUseRootAudioFallback(this@VolumeOverlayService, overlayPrefs)) {
+                return
+            }
             handler.postDelayed(this, AUTO_REFRESH_MS)
         }
     }
@@ -99,8 +108,24 @@ class VolumeOverlayService : Service() {
     private val pollRunnable = object : Runnable {
         override fun run() {
             if (!isWatching) return
+            if (isPlaybackIdle()) {
+                // Nothing is playing: the overlay would not show anything, so stop
+                // reading stream volumes twice a second. Re-check playback presence
+                // at a slow idle cadence; the playback callback re-arms fast
+                // polling as soon as playback starts.
+                pollBackedOff = true
+                handler.postDelayed(this, POLL_IDLE_INTERVAL_MS)
+                return
+            }
+            pollBackedOff = false
             handleVolumeSignal(DiagnosticsStore.OVERLAY_SIGNAL_POLL)
             handler.postDelayed(this, POLL_INTERVAL_MS)
+        }
+    }
+
+    private val playbackCallback = object : AudioManager.AudioPlaybackCallback() {
+        override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
+            onPlaybackChanged(configs)
         }
     }
 
@@ -178,6 +203,7 @@ class VolumeOverlayService : Service() {
             addAction(RINGER_MODE_CHANGED_ACTION)
         }
         registerReceiver(volumeReceiver, filter)
+        audioManager.registerAudioPlaybackCallback(playbackCallback, null)
         isWatching = true
         diagnosticsStore.recordOverlayWatchStart()
         val notification = buildNotification()
@@ -197,6 +223,7 @@ class VolumeOverlayService : Service() {
         if (!isWatching) return
         runCatching { contentResolver.unregisterContentObserver(volumeObserver) }
         runCatching { unregisterReceiver(volumeReceiver) }
+        runCatching { audioManager.unregisterAudioPlaybackCallback(playbackCallback) }
         handler.removeCallbacks(pollRunnable)
         isWatching = false
         if (clearPrefs) {
@@ -208,6 +235,39 @@ class VolumeOverlayService : Service() {
 
     private fun onVolumeChanged() {
         handleVolumeSignal(DiagnosticsStore.OVERLAY_SIGNAL_OBSERVER, force = true)
+    }
+
+    /**
+     * Event-driven replacement for the periodic overlay refresh: playback config
+     * changes refresh a visible overlay immediately, and starting playback re-arms
+     * the volume-key fallback poll at full cadence.
+     */
+    private fun onPlaybackChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
+        val list = configs ?: return
+        if (!isWatching) return
+        if (list.isNotEmpty() && pollBackedOff) {
+            pollBackedOff = false
+            handler.removeCallbacks(pollRunnable)
+            handler.postDelayed(pollRunnable, POLL_INTERVAL_MS)
+        }
+        if (overlayView?.parent != null) {
+            val signature = buildActiveSignature()
+            if (signature != activeSignature) {
+                activeSignature = signature
+                populateList()
+            }
+        }
+    }
+
+    /** Cheap "is anything playing" check. Root fallback adds a dumpsys query only while in use. */
+    private fun isPlaybackIdle(): Boolean {
+        if (PlaybackUtils.getActivePlaybackConfigurationsSafe(this, diagnosticsStore).isNotEmpty()) {
+            return false
+        }
+        if (PlaybackUtils.shouldUseRootAudioFallback(this, overlayPrefs)) {
+            return !PlaybackUtils.hasNonIgnoredPlayback(this, packageManager, overlayPrefs, diagnosticsStore)
+        }
+        return true
     }
 
     private fun handleVolumeSignal(reason: String, force: Boolean = false) {
@@ -537,10 +597,10 @@ class VolumeOverlayService : Service() {
         }
 
         val iconView = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(dpToPx(20), dpToPx(20)).apply {
+            layoutParams = LinearLayout.LayoutParams(dpToPx(24), dpToPx(24)).apply {
                 marginEnd = dpToPx(6)
             }
-            setImageDrawable(resolveIcon(entry.key.packageName))
+            AppIconLoader.loadInto(this@VolumeOverlayService, entry.key.packageName, this)
         }
 
         val nameView = TextView(this).apply {
@@ -677,9 +737,10 @@ class VolumeOverlayService : Service() {
             progressBackgroundTintList = ColorStateList.valueOf(OVERLAY_TRACK)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
+                dpToPx(44),
                 Gravity.CENTER_VERTICAL
             )
+            withBiggerThumb(1.35f)
             var lastProgress = progress
             var lastChangeTime = SystemClock.elapsedRealtime()
             var ignoreNextProgrammatic = false
@@ -864,7 +925,12 @@ class VolumeOverlayService : Service() {
 
     private fun startAutoRefresh() {
         handler.removeCallbacks(autoRefreshRunnable)
-        handler.postDelayed(autoRefreshRunnable, AUTO_REFRESH_MS)
+        // The AudioPlaybackCallback covers the normal case. This timer is only a
+        // fallback for root-audio-fallback sessions, which dumpsys reports without
+        // any listener event.
+        if (PlaybackUtils.shouldUseRootAudioFallback(this, overlayPrefs)) {
+            handler.postDelayed(autoRefreshRunnable, AUTO_REFRESH_MS)
+        }
     }
 
     private fun buildActiveSignature(): String {
@@ -952,15 +1018,6 @@ class VolumeOverlayService : Service() {
         }
     }
 
-
-    private fun resolveIcon(packageName: String): Drawable? {
-        return iconCache[packageName] ?: try {
-            val appInfo = packageManager.getApplicationInfo(packageName, 0)
-            packageManager.getApplicationIcon(appInfo).also { iconCache[packageName] = it }
-        } catch (_: Exception) {
-            getDrawable(android.R.drawable.sym_def_app_icon)
-        }
-    }
 
     private fun copyToClipboard(text: String) {
         val manager = getSystemService(android.content.ClipboardManager::class.java)
@@ -1189,7 +1246,14 @@ class VolumeOverlayService : Service() {
         private const val CHANNEL_ID = "overlay_watcher"
         private const val NOTIFICATION_ID = 1201
         private const val AUTO_HIDE_MS = 3500L
-        private const val AUTO_REFRESH_MS = 1000L
+        // List refresh while a visible overlay is up. Only used as a fallback when
+        // the root audio fallback is active (dumpsys entries have no listener API);
+        // normal playback changes arrive via AudioPlaybackCallback.
+        private const val AUTO_REFRESH_MS = 5000L
+        private const val POLL_INTERVAL_MS = 500L
+        // Volume-key fallback cadence while nothing is playing: slow re-check so we
+        // do not read stream volumes twice a second when the overlay cannot show.
+        private const val POLL_IDLE_INTERVAL_MS = 5000L
         private const val VOLUME_MUSIC_SETTING = "volume_music"
         private const val VOLUME_RING_SETTING = "volume_ring"
         private const val VOLUME_ALARM_SETTING = "volume_alarm"
@@ -1200,7 +1264,6 @@ class VolumeOverlayService : Service() {
         private const val VOLUME_BLUETOOTH_SCO_SETTING = "volume_bluetooth_sco"
         private const val VOLUME_ACCESSIBILITY_SETTING = "volume_accessibility"
         private const val VOLUME_ASSISTANT_SETTING = "volume_assistant"
-        private const val POLL_INTERVAL_MS = 500L
         private const val VOLUME_CHANGED_ACTION = "android.media.VOLUME_CHANGED_ACTION"
         private const val STREAM_MUTE_CHANGED_ACTION = "android.media.STREAM_MUTE_CHANGED_ACTION"
         private const val MASTER_MUTE_CHANGED_ACTION = "android.media.MASTER_MUTE_CHANGED_ACTION"

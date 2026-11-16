@@ -13,41 +13,127 @@ import kotlin.math.max
 object PlaybackUtils {
     private const val TAG = "PlaybackUtils"
 
-    private val clientPackageMethod = runCatching {
+    // Hidden-API members are resolved lazily and re-tried after failure.
+    // A lookup that fails early (e.g. before VMRuntime hidden-API exemptions are
+    // applied on Android 9+) must not permanently disable the feature, so we only
+    // cache successful resolutions and log each failing lookup once per process.
+    private class HiddenMethodResolver(
+        private val label: String,
+        private val resolve: () -> java.lang.reflect.Method,
+    ) {
+        @Volatile
+        private var cached: java.lang.reflect.Method? = null
+        @Volatile
+        private var failureLogged: Boolean = false
+
+        fun get(): java.lang.reflect.Method? {
+            cached?.let { return it }
+            val resolved = try {
+                resolve()
+            } catch (t: Throwable) {
+                if (!failureLogged) {
+                    failureLogged = true
+                    Log.w(TAG, "Hidden-API reflection lookup failed: $label", t)
+                }
+                null
+            }
+            if (resolved != null) {
+                cached = resolved
+            }
+            return resolved
+        }
+    }
+
+    private class HiddenIntFieldResolver(
+        private val label: String,
+        private val resolve: () -> Int,
+    ) {
+        @Volatile
+        private var cached: Int? = null
+        @Volatile
+        private var failureLogged: Boolean = false
+
+        fun get(): Int? {
+            cached?.let { return it }
+            val resolved = try {
+                resolve()
+            } catch (t: Throwable) {
+                if (!failureLogged) {
+                    failureLogged = true
+                    Log.w(TAG, "Hidden-API reflection lookup failed: $label", t)
+                }
+                null
+            }
+            if (resolved != null) {
+                cached = resolved
+            }
+            return resolved
+        }
+    }
+
+    private val clientPackageMethod = HiddenMethodResolver("AudioPlaybackConfiguration.getClientPackageName") {
         AudioPlaybackConfiguration::class.java.getDeclaredMethod("getClientPackageName").apply {
             isAccessible = true
         }
-    }.getOrNull()
+    }
 
-    private val clientUidMethod = runCatching {
+    private val clientUidMethod = HiddenMethodResolver("AudioPlaybackConfiguration.getClientUid") {
         AudioPlaybackConfiguration::class.java.getDeclaredMethod("getClientUid").apply {
             isAccessible = true
         }
-    }.getOrNull()
+    }
 
-    private val playerProxyMethod = runCatching {
+    private val playerProxyMethod = HiddenMethodResolver("AudioPlaybackConfiguration.getPlayerProxy") {
         AudioPlaybackConfiguration::class.java.getDeclaredMethod("getPlayerProxy").apply {
             isAccessible = true
         }
-    }.getOrNull()
+    }
 
-    private val playerStateMethod = runCatching {
+    private val playerStateMethod = HiddenMethodResolver("AudioPlaybackConfiguration.getPlayerState") {
         AudioPlaybackConfiguration::class.java.getDeclaredMethod("getPlayerState").apply {
             isAccessible = true
         }
-    }.getOrNull()
+    }
 
-    private val isActiveMethod = runCatching {
+    private val isActiveMethod = HiddenMethodResolver("AudioPlaybackConfiguration.isActive") {
         AudioPlaybackConfiguration::class.java.getDeclaredMethod("isActive").apply {
             isAccessible = true
         }
-    }.getOrNull()
+    }
 
-    private val playerStateStartedValue: Int? = runCatching {
+    private val playerStateStartedValue = HiddenIntFieldResolver("AudioPlaybackConfiguration.PLAYER_STATE_STARTED") {
         AudioPlaybackConfiguration::class.java.getDeclaredField("PLAYER_STATE_STARTED").apply {
             isAccessible = true
         }.getInt(null)
-    }.getOrNull()
+    }
+
+    private val userIdMethod = HiddenMethodResolver("UserHandle.getUserId") {
+        android.os.UserHandle::class.java.getDeclaredMethod(
+            "getUserId",
+            Int::class.javaPrimitiveType
+        ).apply {
+            isAccessible = true
+        }
+    }
+
+    private val userHandleOfMethod = HiddenMethodResolver("UserHandle.of") {
+        android.os.UserHandle::class.java.getDeclaredMethod(
+            "of",
+            Int::class.javaPrimitiveType
+        ).apply {
+            isAccessible = true
+        }
+    }
+
+    private val createContextAsUserMethod = HiddenMethodResolver("Context.createContextAsUser") {
+        android.content.Context::class.java.getDeclaredMethod(
+            "createContextAsUser",
+            android.os.UserHandle::class.java,
+            Int::class.javaPrimitiveType
+        ).apply {
+            isAccessible = true
+        }
+    }
 
     private val setVolumeMethodCache = mutableMapOf<Class<*>, java.lang.reflect.Method>()
     private val pauseMethodCache = mutableMapOf<Class<*>, java.lang.reflect.Method>()
@@ -59,16 +145,17 @@ object PlaybackUtils {
         packageManager: PackageManager
     ): String? {
         try {
-            val method = clientPackageMethod
+            val method = clientPackageMethod.get()
             if (method != null) {
                 return method.invoke(config) as? String
             }
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to read client package name", t)
             // Fallback to resolving by UID if hidden API is blocked.
         }
 
         return try {
-            val uidMethod = clientUidMethod ?: return null
+            val uidMethod = clientUidMethod.get() ?: return null
             val uid = uidMethod.invoke(config) as? Int ?: return null
             val packages = getPackagesForUid(context, packageManager, uid)
             packages?.firstOrNull()
@@ -80,7 +167,7 @@ object PlaybackUtils {
 
     fun getClientUid(config: AudioPlaybackConfiguration): Int? {
         return try {
-            val uidMethod = clientUidMethod ?: return null
+            val uidMethod = clientUidMethod.get() ?: return null
             uidMethod.invoke(config) as? Int
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to resolve client uid", t)
@@ -91,13 +178,10 @@ object PlaybackUtils {
     fun getUserIdFromUid(uid: Int?): Int? {
         if (uid == null) return null
         return try {
-            val method = android.os.UserHandle::class.java.getDeclaredMethod(
-                "getUserId",
-                Int::class.javaPrimitiveType
-            )
-            method.isAccessible = true
+            val method = userIdMethod.get() ?: return null
             method.invoke(null, uid) as? Int
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to resolve user id from uid", t)
             null
         }
     }
@@ -121,6 +205,12 @@ object PlaybackUtils {
         diagnosticsStore: DiagnosticsStore? = null,
     ): List<AudioPlaybackConfiguration> {
         val audioManager = context.getSystemService(AudioManager::class.java)
+        if (audioManager == null) {
+            val message = "AudioManager unavailable (getSystemService returned null)"
+            Log.w(TAG, message)
+            diagnosticsStore?.recordLastError(message)
+            return emptyList()
+        }
         val baseConfigs = getActivePlaybackConfigurationsSafe(audioManager, diagnosticsStore)
         val hasAcrossUsers = hasAcrossUsersPermission(context)
         val probeParts = mutableListOf(
@@ -177,27 +267,20 @@ object PlaybackUtils {
 
     private fun createUserHandle(userId: Int): UserHandle? {
         return try {
-            val method = UserHandle::class.java.getDeclaredMethod(
-                "of",
-                Int::class.javaPrimitiveType
-            )
-            method.isAccessible = true
+            val method = userHandleOfMethod.get() ?: return null
             method.invoke(null, userId) as? UserHandle
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to create UserHandle for u$userId", t)
             null
         }
     }
 
     private fun createContextAsUser(context: Context, userHandle: UserHandle): Context? {
         return try {
-            val method = Context::class.java.getDeclaredMethod(
-                "createContextAsUser",
-                UserHandle::class.java,
-                Int::class.javaPrimitiveType
-            )
-            method.isAccessible = true
+            val method = createContextAsUserMethod.get() ?: return null
             method.invoke(context, userHandle, 0) as? Context
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to create user context", t)
             null
         }
     }
@@ -229,22 +312,40 @@ object PlaybackUtils {
     fun hasActivePlayback(configs: List<AudioPlaybackConfiguration>): Boolean {
         for (config in configs) {
             val isStarted = runCatching {
-                val state = playerStateMethod?.invoke(config) as? Int
-                val startedValue = playerStateStartedValue
+                val state = playerStateMethod.get()?.invoke(config) as? Int
+                val startedValue = playerStateStartedValue.get()
                 state != null && startedValue != null && state == startedValue
             }.getOrDefault(false)
             if (isStarted) return true
             val isActive = runCatching {
-                (isActiveMethod?.invoke(config) as? Boolean) == true
+                (isActiveMethod.get()?.invoke(config) as? Boolean) == true
             }.getOrDefault(false)
             if (isActive) return true
         }
         return false
     }
 
+    /** Live status of every hidden-API reflection lookup, shown on the Diagnostics screen. */
+    fun reflectionStatusLines(): List<String> {
+        fun status(label: String, ok: Boolean): String =
+            " - $label: ${if (ok) "ok" else "missing"}"
+        return listOf(
+            status("AudioPlaybackConfiguration.getClientPackageName", clientPackageMethod.get() != null),
+            status("AudioPlaybackConfiguration.getClientUid", clientUidMethod.get() != null),
+            status("AudioPlaybackConfiguration.getPlayerProxy", playerProxyMethod.get() != null),
+            status("AudioPlaybackConfiguration.getPlayerState", playerStateMethod.get() != null),
+            status("AudioPlaybackConfiguration.isActive", isActiveMethod.get() != null),
+            status("AudioPlaybackConfiguration.PLAYER_STATE_STARTED", playerStateStartedValue.get() != null),
+            status("UserHandle.getUserId", userIdMethod.get() != null),
+            status("UserHandle.of", userHandleOfMethod.get() != null),
+            status("Context.createContextAsUser", createContextAsUserMethod.get() != null),
+            " - PlayerProxy.setVolume / pause / start: resolved per player at runtime",
+        )
+    }
+
     fun applyVolumeToPlayer(config: AudioPlaybackConfiguration, volume: Float): Boolean {
         return try {
-            val method = playerProxyMethod ?: return false
+            val method = playerProxyMethod.get() ?: return false
             val playerProxy = method.invoke(config) ?: return false
             val proxyClass = playerProxy.javaClass
             val setVolume = synchronized(setVolumeMethodCache) {
@@ -369,7 +470,7 @@ object PlaybackUtils {
         device: AudioDeviceInfo
     ): Boolean {
         return try {
-            val method = playerProxyMethod ?: return false
+            val method = playerProxyMethod.get() ?: return false
             val playerProxy = method.invoke(config) ?: return false
             val proxyClass = playerProxy.javaClass
             val preferred = runCatching {
@@ -388,7 +489,7 @@ object PlaybackUtils {
 
     fun pausePlayer(config: AudioPlaybackConfiguration): Boolean {
         return try {
-            val method = playerProxyMethod ?: return false
+            val method = playerProxyMethod.get() ?: return false
             val playerProxy = method.invoke(config) ?: return false
             val proxyClass = playerProxy.javaClass
             val pause = synchronized(pauseMethodCache) {
@@ -421,7 +522,7 @@ object PlaybackUtils {
 
     fun playPlayer(config: AudioPlaybackConfiguration): Boolean {
         return try {
-            val method = playerProxyMethod ?: return false
+            val method = playerProxyMethod.get() ?: return false
             val playerProxy = method.invoke(config) ?: return false
             val proxyClass = playerProxy.javaClass
             val play = synchronized(playMethodCache) {

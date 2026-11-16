@@ -180,6 +180,7 @@ class RulesActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
+        applyEdgeToEdge(scroll)
         refresh()
     }
 

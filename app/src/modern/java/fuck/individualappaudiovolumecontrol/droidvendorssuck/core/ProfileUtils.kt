@@ -4,8 +4,11 @@ import android.content.Context
 import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
+import android.util.Log
 
 object ProfileUtils {
+    private const val TAG = "ProfileUtils"
+
     fun currentUserId(): Int? {
         return PlaybackUtils.getUserIdFromUid(Process.myUid())
     }
@@ -38,7 +41,8 @@ object ProfileUtils {
             val method = UserHandle::class.java.getDeclaredMethod("getIdentifier")
             method.isAccessible = true
             method.invoke(handle) as? Int
-        } catch (_: Exception) {
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to resolve user id from UserHandle", t)
             null
         }
     }
@@ -52,7 +56,8 @@ object ProfileUtils {
             )
             method.isAccessible = true
             method.invoke(userManager, userId) as? Boolean ?: false
-        } catch (_: Exception) {
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to check managed profile for u$userId", t)
             false
         }
     }

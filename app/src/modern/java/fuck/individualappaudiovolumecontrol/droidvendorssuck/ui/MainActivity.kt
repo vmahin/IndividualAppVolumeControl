@@ -30,16 +30,17 @@ import android.widget.Spinner
 import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.text.TextUtils
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.Color
 import android.provider.Settings
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.widget.addTextChangedListener
 import android.widget.CheckBox
 import android.view.HapticFeedbackConstants
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.R
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ActiveAppStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AccessibilityUtils
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.DiagnosticsStore
@@ -52,6 +53,8 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ProfileUtils
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.SetupStatus
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AudioSettingsPrefs
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AppIconLoader
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.withBiggerThumb
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.service.PlaybackControllerService
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.service.VolumeOverlayService
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.ui.SeekBarTicksView
@@ -114,12 +117,15 @@ class MainActivity : AppCompatActivity() {
     private var profileUpdating: Boolean = false
     private val activeSince = mutableMapOf<String, Long>()
     private val lastNonZeroVolumes = mutableMapOf<String, Float>()
-    private val iconCache = mutableMapOf<String, Drawable>()
     private val handler = Handler(Looper.getMainLooper())
     private val diagnosticsStore by lazy { DiagnosticsStore(this) }
     private val notificationPrefs by lazy { NotificationPrefs(this) }
     private val refreshRunnable = object : Runnable {
         override fun run() {
+            // Nothing playing -> the active list is empty and there is nothing to
+            // refresh; stop the loop (the playback callback re-arms it when
+            // playback starts).
+            if (activeEntries.isEmpty()) return
             updateActiveApps()
             updateLastUpdated()
             handler.postDelayed(this, REFRESH_INTERVAL_MS)
@@ -131,6 +137,12 @@ class MainActivity : AppCompatActivity() {
             if (configs == null) return
             updateActiveApps()
             updateLastUpdated()
+            // Re-arm the periodic refresh while playback is present so volume
+            // changes made from the notification or overlay also reach this list.
+            if (activeEntries.isNotEmpty()) {
+                handler.removeCallbacks(refreshRunnable)
+                handler.post(refreshRunnable)
+            }
         }
     }
 
@@ -317,7 +329,7 @@ class MainActivity : AppCompatActivity() {
 
         notificationPresentationHint = TextView(this).apply {
             textSize = 12f
-            setTextColor(Color.parseColor("#616161"))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.secondary_text))
             setPadding(dpToPx(8), 0, 0, dpToPx(6))
         }
 
@@ -343,7 +355,7 @@ class MainActivity : AppCompatActivity() {
         accessibilityWarningView = TextView(this).apply {
             text = "Overlay enabled, but volume key listener is off. Enable Accessibility service for reliable volume-button triggers."
             textSize = 12f
-            setTextColor(0xFFB71C1C.toInt())
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.warning))
             setPadding(0, 0, 0, 8)
             visibility = View.GONE
         }
@@ -424,7 +436,7 @@ class MainActivity : AppCompatActivity() {
         overlayRootFallbackHint = TextView(this).apply {
             text = "Uses dumpsys via root to list active audio when cross-profile access is denied."
             textSize = 12f
-            setTextColor(Color.parseColor("#616161"))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.secondary_text))
             setPadding(dpToPx(8), 0, 0, dpToPx(6))
         }
 
@@ -675,6 +687,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
+        applyEdgeToEdge(scroll)
 
         startForegroundService(Intent(this, PlaybackControllerService::class.java))
         updateControlStatus()
@@ -885,11 +898,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         val iconView = ImageView(this).apply {
-            val size = dpToPx(32)
+            val size = dpToPx(40)
             layoutParams = LinearLayout.LayoutParams(size, size).apply {
                 marginEnd = dpToPx(12)
             }
-            setImageDrawable(resolveIcon(entry.key.packageName))
+            AppIconLoader.loadInto(this@MainActivity, entry.key.packageName, this)
         }
 
         val nameContainer = LinearLayout(this).apply {
@@ -914,7 +927,7 @@ class MainActivity : AppCompatActivity() {
         val profileView = TextView(this).apply {
             text = ProfileUtils.buildProfileLabel(this@MainActivity, entry.key.userId)
             textSize = 12f
-            setTextColor(Color.parseColor("#616161"))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.secondary_text))
             visibility = if (shouldShowProfile(entry.key.userId)) View.VISIBLE else View.GONE
         }
 
@@ -1024,7 +1037,7 @@ class MainActivity : AppCompatActivity() {
         val sliderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dpToPx(56), dpToPx(6), 0, 0)
+            setPadding(dpToPx(64), dpToPx(6), 0, 0)
         }
 
         val sliderFrame = FrameLayout(this).apply {
@@ -1043,9 +1056,10 @@ class MainActivity : AppCompatActivity() {
 
         slider.layoutParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
+            dpToPx(48),
             Gravity.CENTER_VERTICAL
         )
+        slider.withBiggerThumb(1.5f)
 
         sliderFrame.addView(ticksView)
         sliderFrame.addView(slider)
@@ -1256,16 +1270,6 @@ class MainActivity : AppCompatActivity() {
             REQUEST_NOTIFICATIONS
         )
     }
-
-    private fun resolveIcon(packageName: String): Drawable? {
-        return iconCache[packageName] ?: try {
-            val appInfo = packageManager.getApplicationInfo(packageName, 0)
-            packageManager.getApplicationIcon(appInfo).also { iconCache[packageName] = it }
-        } catch (_: Exception) {
-            getDrawable(android.R.drawable.sym_def_app_icon)
-        }
-    }
-
 
     private fun copyToClipboard(text: String, label: String = "Package") {
         val manager = getSystemService(ClipboardManager::class.java)
@@ -1872,7 +1876,12 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Controls: disabled (open Setup Check)"
         }
-        controlStatusView.setTextColor(if (ready) 0xFF1B5E20.toInt() else 0xFFB71C1C.toInt())
+        controlStatusView.setTextColor(
+            ContextCompat.getColor(
+                this,
+                if (ready) R.color.success else R.color.warning
+            )
+        )
     }
 
     private fun canDrawOverlays(): Boolean {

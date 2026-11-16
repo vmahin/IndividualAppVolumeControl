@@ -153,6 +153,7 @@ class SetupCheckActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
+        applyEdgeToEdge(scroll)
         refresh()
     }
 

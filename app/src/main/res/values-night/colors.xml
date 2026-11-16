@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark mode fallback (API < 31): true-black background, lighter orange primary. -->
+    <color name="app_primary">#FFB96E</color>
+    <color name="app_on_primary">#4A2800</color>
+    <color name="app_primary_container">#5C3A00</color>
+    <color name="app_on_primary_container">#FFDCBE</color>
+    <color name="app_background">#000000</color>
+    <color name="app_on_background">#FFFFFF</color>
+    <color name="secondary_text">#B3B3B3</color>
+    <color name="success">#81C784</color>
+    <color name="warning">#FF8A80</color>
+</resources>

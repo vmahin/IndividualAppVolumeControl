@@ -213,6 +213,7 @@ class DiagnosticsActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
+        applyEdgeToEdge(scroll)
         refresh()
     }
 
@@ -448,6 +449,8 @@ class DiagnosticsActivity : AppCompatActivity() {
             "hidden_api_policy: ${hiddenApiPolicy ?: "-"}",
             "hidden_api_policy_pre_p_apps: ${hiddenApiPolicyPreP ?: "-"}",
             "hidden_api_policy_p_apps: ${hiddenApiPolicyP ?: "-"}",
+            "Hidden-API reflection status:",
+            *PlaybackUtils.reflectionStatusLines().toTypedArray(),
             "WRITE_SECURE_SETTINGS granted: $hasWriteSecureSettings",
             "POST_NOTIFICATIONS: $postNotificationsStatus",
             "MODIFY_AUDIO_SETTINGS granted: $hasModifyAudio",

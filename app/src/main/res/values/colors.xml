@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 style palette (fallback for API < 31, orange seed matching the app's overlay accent). -->
+    <color name="app_primary">#8B5000</color>
+    <color name="app_on_primary">#FFFFFF</color>
+    <color name="app_primary_container">#FFDCBE</color>
+    <color name="app_on_primary_container">#2E1600</color>
+    <color name="app_background">#FFF8F6</color>
+    <color name="app_on_background">#211B14</color>
+    <color name="secondary_text">#616161</color>
+    <color name="success">#1B5E20</color>
+    <color name="warning">#B71C1C</color>
+</resources>

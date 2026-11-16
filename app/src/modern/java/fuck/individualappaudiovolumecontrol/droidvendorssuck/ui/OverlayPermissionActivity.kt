@@ -67,6 +67,7 @@ class OverlayPermissionActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
+        applyEdgeToEdge(scroll)
     }
 
     override fun onResume() {

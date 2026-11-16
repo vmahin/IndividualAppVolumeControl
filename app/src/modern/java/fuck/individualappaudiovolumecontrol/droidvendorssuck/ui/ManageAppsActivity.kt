@@ -201,6 +201,7 @@ class ManageAppsActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
+        applyEdgeToEdge(scroll)
         updateProfileOptions()
         updateProfileHint()
         refreshSavedList()
