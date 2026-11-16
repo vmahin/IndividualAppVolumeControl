@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK + Module
 on:
   workflow_dispatch:
   push:
@@ -14,9 +14,17 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - run: chmod +x gradlew
-      - run: ./gradlew assembleDebug --no-daemon
+        with:
+          gradle-version: 8.13
+      - name: Build modern debug APK
+        run: gradle :app:assembleModernDebug --no-daemon
+      - name: Package Magisk module
+        run: |
+          chmod +x module/package.sh
+          ./module/package.sh app/build/outputs/apk/modern/debug/app-modern-debug.apk IndividualAppAudioVolumeControl-magisk.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: apk
-          path: app/build/outputs/apk/**/*.apk
+          name: build
+          path: |
+            app/build/outputs/apk/modern/debug/app-modern-debug.apk
+            IndividualAppAudioVolumeControl-magisk.zip
