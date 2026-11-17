@@ -21,7 +21,9 @@ import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.widget.addTextChangedListener
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.R
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.MarkerStyle
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ProfileUtils
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeStore
@@ -54,6 +56,7 @@ class ManageAppsActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
+            applyGlass(28f)
         }
 
         val header = TextView(this).apply {
@@ -201,7 +204,7 @@ class ManageAppsActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
-        applyEdgeToEdge(scroll)
+        applyLiquidBackground(scroll)
         updateProfileOptions()
         updateProfileHint()
         refreshSavedList()
@@ -296,7 +299,8 @@ class ManageAppsActivity : AppCompatActivity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 8, 0, 8)
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8))
+            applyGlass(20f)
         }
 
         val nameView = TextView(this).apply {
@@ -332,7 +336,8 @@ class ManageAppsActivity : AppCompatActivity() {
     private fun buildSavedRow(entry: VolumeStore.VolumeKey, label: String): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 8, 0, 8)
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8))
+            applyGlass(20f)
         }
 
         val nameContainer = LinearLayout(this).apply {
@@ -354,7 +359,7 @@ class ManageAppsActivity : AppCompatActivity() {
         val profileView = TextView(this).apply {
             text = ProfileUtils.buildProfileLabel(this@ManageAppsActivity, entry.userId)
             textSize = 12f
-            setTextColor(0xFF616161.toInt())
+            setTextColor(ContextCompat.getColor(this@ManageAppsActivity, R.color.secondary_text))
         }
 
         nameContainer.addView(nameView)
@@ -436,8 +441,13 @@ class ManageAppsActivity : AppCompatActivity() {
         return TextView(this).apply {
             text = message
             textSize = 14f
-            setPadding(0, 8, 0, 8)
+            setPadding(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(8))
+            applyGlass(20f)
         }
+    }
+
+    private fun dpToPx(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 
     private fun resolveLabel(packageName: String): String {
