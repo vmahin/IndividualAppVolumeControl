@@ -34,6 +34,7 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.SetupStatus
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AudioSettingsPrefs
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.service.PlaybackControllerService
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.service.VolumeOverlayService
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ModuleInstaller
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.service.VolumeKeyAccessibilityService
 import java.text.SimpleDateFormat
@@ -301,6 +302,7 @@ class DiagnosticsActivity : AppCompatActivity() {
             null
         }
         val controllerServiceRunning = isServiceRunning(PlaybackControllerService::class.java)
+        val overlayServiceRunning = isServiceRunning(VolumeOverlayService::class.java)
         val canDrawOverlays = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             Settings.canDrawOverlays(this)
         } else {
@@ -407,6 +409,7 @@ class DiagnosticsActivity : AppCompatActivity() {
             "Overlay signals (poll): ${snapshot.overlayPollCount} @ $overlayPollTime",
             "Overlay signals (manual): ${snapshot.overlayManualCount} @ $overlayManualTime",
             "Playback controller service running: $controllerServiceRunning",
+            "Overlay watcher service running: $overlayServiceRunning",
             "Playback controller starts: ${snapshot.controllerServiceStarts}",
             "Playback controller last start: $controllerServiceStartTime",
             "Playback notifications enabled (manager): $notificationsEnabled",

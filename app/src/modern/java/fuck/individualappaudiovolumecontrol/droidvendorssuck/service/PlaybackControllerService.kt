@@ -98,6 +98,16 @@ class PlaybackControllerService : Service() {
         super.onDestroy()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping the app away from recents must not kill volume control. The
+        // default Service.onTaskRemoved() calls stopSelf(), which stops the
+        // foreground controller and lets the process die. Keep running instead:
+        // the foreground state (mediaPlayback) holds the process alive, and
+        // START_STICKY restarts the service if the system still kills it. No
+        // restart PendingIntent is needed because this service is foreground.
+        // Deliberately do NOT call super.onTaskRemoved() (it stops the service).
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_REAPPLY -> safeApplyVolumes(

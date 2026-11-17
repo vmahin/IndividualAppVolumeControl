@@ -64,6 +64,8 @@ import java.util.Locale
 import android.widget.Toast
 import kotlin.math.abs
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.OutputLabelUtils
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.RootShell
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
     private lateinit var audioManager: AudioManager
@@ -106,6 +108,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var reduceEffectsToggle: CheckBox
     private lateinit var bluetoothPermissionButton: Button
     private lateinit var rulesButton: Button
+    private lateinit var keepAliveButton: Button
+    private lateinit var batterySettingsButton: Button
     private var overlayUpdating: Boolean = false
     private lateinit var controlStatusView: TextView
     private var controlsEnabled: Boolean = true
@@ -522,6 +526,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        keepAliveButton = Button(this).apply {
+            text = "Keep alive (battery whitelist)"
+            setOnClickListener { runKeepAlive() }
+        }
+
+        batterySettingsButton = Button(this).apply {
+            text = "Open battery settings"
+            setOnClickListener { openBatterySettings() }
+        }
+
         lastUpdatedView = TextView(this).apply {
             text = "Last updated: -"
             textSize = 12f
@@ -692,6 +706,8 @@ class MainActivity : AppCompatActivity() {
         root.addControl(styleMainCheckBox(defaultMuteToggle))
         root.addControl(styleMainCheckBox(autoResumeToggle))
         root.addControl(styleMainCheckBox(reduceEffectsToggle))
+        root.addControl(styleMainButton(keepAliveButton))
+        root.addControl(styleMainButton(batterySettingsButton))
         root.addControl(lastUpdatedView)
         root.addControl(activeHeaderRow, topDp = 20)
         root.addControl(activeContainer)
@@ -1578,6 +1594,47 @@ class MainActivity : AppCompatActivity() {
                 Toast.LENGTH_SHORT
             ).show()
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+    }
+
+    /** Runs `su -c "cmd deviceidle whitelist +<pkg>"` via the existing RootShell
+     *  helper so Android's aggressive doze/standby does not kill the service.
+     *  Root only — reports success/failure on the UI thread. No new libraries. */
+    private fun runKeepAlive() {
+        keepAliveButton.isEnabled = false
+        thread(name = "KeepAlive") {
+            val outcome = if (!RootShell.isAvailable()) {
+                "Keep alive failed: root unavailable"
+            } else {
+                val result = RootShell.run(
+                    "cmd deviceidle whitelist +$packageName",
+                    timeoutMs = 5000L
+                )
+                if (result.exitCode == 0) {
+                    "Keep alive: whitelist applied ($packageName)"
+                } else {
+                    val detail = result.stdout.take(120).ifBlank { result.exitCode.toString() }
+                    "Keep alive failed ($detail)"
+                }
+            }
+            handler.post {
+                keepAliveButton.isEnabled = true
+                Toast.makeText(this@MainActivity, outcome, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** Opens the system battery-optimization list. ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+     *  needs no permission (unlike ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS). */
+    private fun openBatterySettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (_: Exception) {
+            Toast.makeText(
+                this,
+                "Battery settings unavailable on this device",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 

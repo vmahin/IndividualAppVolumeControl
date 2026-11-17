@@ -190,6 +190,17 @@ class VolumeOverlayService : Service() {
         super.onDestroy()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping the app away from recents must not kill the overlay watcher.
+        // The default Service.onTaskRemoved() calls stopSelf(), which stops the
+        // watcher (and with it the volume-button overlay). Keep running: the
+        // foreground state (mediaPlayback) holds the process alive, and
+        // START_STICKY restarts the service if the system still kills it.
+        // Deliberately do NOT call super.onTaskRemoved() (it stops the service).
+        // Explicit user stops (ACTION_STOP_WATCH / hide-after-stop) are still
+        // handled by their own stopSelf() calls and are unaffected.
+    }
+
     private fun startWatching() {
         if (isWatching) return
         if (!canDrawOverlays()) {

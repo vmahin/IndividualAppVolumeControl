@@ -18,18 +18,25 @@ class BootReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    Log.w(TAG, "Skipping boot start on Android 14+; posting start notification instead")
-                    postStartNotification(context)
-                    return
-                }
-                context.startForegroundService(Intent(context, PlaybackControllerService::class.java))
-                val prefs = OverlayPrefs(context)
-                if (prefs.isOverlayEnabled() && canDrawOverlays(context)) {
-                    val overlayIntent = Intent(context, VolumeOverlayService::class.java).apply {
-                        action = VolumeOverlayService.ACTION_START_WATCH
+                // Start the controller (and the overlay watcher, if enabled) after
+                // boot / app update. mediaPlayback is an allowed foreground-service
+                // type from BOOT_COMPLETED on Android 14+, so the direct start is
+                // permitted; if the system still refuses it, fall back to a
+                // tap-to-start notification so the user can enable the service.
+                val started = runCatching {
+                    context.startForegroundService(Intent(context, PlaybackControllerService::class.java))
+                    val prefs = OverlayPrefs(context)
+                    if (prefs.isOverlayEnabled() && canDrawOverlays(context)) {
+                        val overlayIntent = Intent(context, VolumeOverlayService::class.java).apply {
+                            action = VolumeOverlayService.ACTION_START_WATCH
+                        }
+                        context.startForegroundService(overlayIntent)
                     }
-                    context.startForegroundService(overlayIntent)
+                    true
+                }.getOrDefault(false)
+                if (!started) {
+                    Log.w(TAG, "Boot start refused; posting start notification instead")
+                    postStartNotification(context)
                 }
             }
         }
