@@ -23,5 +23,64 @@
         <item name="colorControlActivated">@color/app_primary</item>
         <item name="colorControlNormal">@color/secondary_text</item>
         <item name="colorControlHighlight">@color/app_primary</item>
+
+        <!-- Liquid glass widget styles. Overriding the android: attrs makes the
+             programmatically constructed plain widgets (Button, CheckBox, SeekBar,
+             EditText) pick the glass look up without touching their creation sites.
+             Both appcompat and android variants are set so XML-inflated widgets
+             (AppCompatButton etc.) get the same treatment. -->
+        <item name="android:buttonStyle">@style/GlassButton</item>
+        <item name="buttonStyle">@style/GlassButton</item>
+        <item name="android:checkboxStyle">@style/GlassCheckBox</item>
+        <item name="checkboxStyle">@style/GlassCheckBox</item>
+        <item name="android:seekBarStyle">@style/GlassSeekBar</item>
+        <item name="seekBarStyle">@style/GlassSeekBar</item>
+        <item name="android:editTextStyle">@style/GlassEditText</item>
+        <item name="editTextStyle">@style/GlassEditText</item>
+    </style>
+
+    <!-- Glass pill buttons: translucent white fill + sheen + thin light border,
+         soft shadow, press scale animation, fully rounded. -->
+    <style name="GlassButton" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/glass_button_bg</item>
+        <item name="android:stateListAnimator">@animator/glass_button_press</item>
+        <item name="android:textColor">@color/app_on_background</item>
+        <item name="android:elevation">2dp</item>
+        <item name="android:minHeight">44dp</item>
+        <item name="android:minWidth">88dp</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+    </style>
+
+    <!-- Glass checkbox rows: the whole row is a pill, the indicator is a glass
+         rounded square with a check mark. -->
+    <style name="GlassCheckBox" parent="Widget.AppCompat.CompoundButton.CheckBox">
+        <item name="android:button">@drawable/glass_checkbox</item>
+        <item name="android:background">@drawable/glass_pill_bg</item>
+        <item name="android:minHeight">44dp</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:textColor">@color/app_on_background</item>
+    </style>
+
+    <!-- Glass sliders: capsule track + glossy capsule thumb, accent-tinted. -->
+    <style name="GlassSeekBar" parent="Widget.AppCompat.SeekBar">
+        <item name="android:progressDrawable">@drawable/glass_seekbar_track</item>
+        <item name="android:thumb">@drawable/glass_seekbar_thumb</item>
+        <item name="android:thumbTint">@color/app_primary</item>
+        <item name="android:progressTint">@color/app_primary</item>
+        <item name="android:progressBackgroundTint">@color/glass_track</item>
+        <item name="android:minHeight">24dp</item>
+        <item name="android:maxHeight">24dp</item>
+    </style>
+
+    <!-- Glass text fields: translucent rounded surface with a light border. -->
+    <style name="GlassEditText" parent="Widget.AppCompat.EditText">
+        <item name="android:background">@drawable/glass_edittext_bg</item>
+        <item name="android:textColor">@color/app_on_background</item>
+        <item name="android:textColorHint">@color/secondary_text</item>
+        <item name="android:minHeight">44dp</item>
     </style>
 </resources>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Glossy glass capsule thumb: vertical bright-to-dim gradient (light catching
+    the top), a thin light rim, fully rounded. Tintable (thumbTint) so it picks
+    up the accent color; the existing ScaledThumbDrawable wrapper keeps it big.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="#FFFFFF"
+        android:centerColor="#E8E8E8"
+        android:endColor="#9E9E9E" />
+    <stroke
+        android:width="1dp"
+        android:color="#CCFFFFFF" />
+    <corners android:radius="100dp" />
+    <size
+        android:width="16dp"
+        android:height="30dp" />
+</shape>

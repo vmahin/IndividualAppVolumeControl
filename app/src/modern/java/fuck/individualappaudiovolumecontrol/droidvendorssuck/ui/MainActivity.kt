@@ -103,6 +103,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var overlayDismissOutsideToggle: CheckBox
     private lateinit var defaultMuteToggle: CheckBox
     private lateinit var autoResumeToggle: CheckBox
+    private lateinit var reduceEffectsToggle: CheckBox
     private lateinit var bluetoothPermissionButton: Button
     private lateinit var rulesButton: Button
     private var overlayUpdating: Boolean = false
@@ -157,6 +158,7 @@ class MainActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
+            applyGlass(28f)
         }
 
         val header = TextView(this).apply {
@@ -512,6 +514,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        reduceEffectsToggle = CheckBox(this).apply {
+            text = "Reduce effects (disable blur)"
+            isChecked = audioSettingsPrefs.isReduceEffectsEnabled()
+            setOnCheckedChangeListener { _, isChecked ->
+                audioSettingsPrefs.setReduceEffectsEnabled(isChecked)
+            }
+        }
+
         lastUpdatedView = TextView(this).apply {
             text = "Last updated: -"
             textSize = 12f
@@ -671,6 +681,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(audioSettingsHint)
         root.addView(defaultMuteToggle)
         root.addView(autoResumeToggle)
+        root.addView(reduceEffectsToggle)
         root.addView(lastUpdatedView)
         root.addView(activeHeaderRow)
         root.addView(activeContainer)
@@ -687,7 +698,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
-        applyEdgeToEdge(scroll)
+        applyLiquidBackground(scroll)
 
         startForegroundService(Intent(this, PlaybackControllerService::class.java))
         updateControlStatus()
@@ -879,6 +890,7 @@ class MainActivity : AppCompatActivity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 12, 0, 12)
+            applyGlass(20f)
         }
 
         val headerRow = LinearLayout(this).apply {
@@ -946,7 +958,7 @@ class MainActivity : AppCompatActivity() {
             text = output?.let { "${OutputLabelUtils.shortType(it.type)} ${it.name ?: "Output"}" } ?: "Output"
             textSize = 11f
             setPadding(dpToPx(6), 0, dpToPx(6), 0)
-            setTextColor(0xFF455A64.toInt())
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.secondary_text))
             visibility = if (output == null) View.GONE else View.VISIBLE
         }
 
@@ -1083,7 +1095,8 @@ class MainActivity : AppCompatActivity() {
         return TextView(this).apply {
             text = message
             textSize = 14f
-            setPadding(0, 8, 0, 8)
+            setPadding(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(8))
+            applyGlass(20f)
         }
     }
 

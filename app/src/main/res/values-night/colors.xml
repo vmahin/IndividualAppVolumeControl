@@ -10,4 +10,16 @@
     <color name="secondary_text">#B3B3B3</color>
     <color name="success">#81C784</color>
     <color name="warning">#FF8A80</color>
+
+    <!-- Liquid glass (dark / true-black theme): faint white tint (10-20% alpha). -->
+    <color name="glass_fill">#24FFFFFF</color>
+    <color name="glass_fill_pressed">#40FFFFFF</color>
+    <color name="glass_fill_strong">#52FFFFFF</color>
+    <color name="glass_field_fill">#26FFFFFF</color>
+    <color name="glass_track">#33FFFFFF</color>
+    <color name="glass_border">#59FFFFFF</color>
+    <!-- Soft gradient blobs (dark): deep blue / purple / teal over true black. -->
+    <color name="glass_blob_blue">#592B4A8C</color>
+    <color name="glass_blob_purple">#592A1B5E</color>
+    <color name="glass_blob_teal">#590F3D3A</color>
 </resources>

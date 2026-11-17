@@ -10,4 +10,19 @@
     <color name="secondary_text">#616161</color>
     <color name="success">#1B5E20</color>
     <color name="warning">#B71C1C</color>
+
+    <!-- Liquid glass (light theme):
+         Panel fill is a frosted white tint; in light mode it needs more opacity
+         than the 10-20% used on dark so panels stay distinguishable from the
+         light gradient behind them (WCAG contrast for the text on top). -->
+    <color name="glass_fill">#4DFFFFFF</color>
+    <color name="glass_fill_pressed">#73FFFFFF</color>
+    <color name="glass_fill_strong">#8CFFFFFF</color>
+    <color name="glass_field_fill">#33000000</color>
+    <color name="glass_track">#33000000</color>
+    <color name="glass_border">#66FFFFFF</color>
+    <!-- Soft gradient blobs (light): pastel blue / purple / teal over the base. -->
+    <color name="glass_blob_blue">#997CB9FF</color>
+    <color name="glass_blob_purple">#8CB39CFF</color>
+    <color name="glass_blob_teal">#808CE0D4</color>
 </resources>
