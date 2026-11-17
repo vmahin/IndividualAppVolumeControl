@@ -283,13 +283,13 @@ class MainActivity : AppCompatActivity() {
         val overlayTitle = TextView(this).apply {
             text = "Overlay controls"
             textSize = 16f
-            setPadding(0, 24, 0, 8)
+            setPadding(0, 20, 0, 8)
         }
 
         val notificationTitle = TextView(this).apply {
             text = "Notification controls"
             textSize = 16f
-            setPadding(0, 24, 0, 8)
+            setPadding(0, 20, 0, 8)
         }
 
         notificationPresentationAdapter = ArrayAdapter(
@@ -483,7 +483,7 @@ class MainActivity : AppCompatActivity() {
         val audioSettingsTitle = TextView(this).apply {
             text = "Audio settings"
             textSize = 16f
-            setPadding(0, 16, 0, 8)
+            setPadding(0, 20, 0, 8)
         }
 
         val audioSettingsHint = TextView(this).apply {
@@ -531,7 +531,7 @@ class MainActivity : AppCompatActivity() {
         activeTitle = TextView(this).apply {
             text = "Active audio"
             textSize = 16f
-            setPadding(0, 24, 0, 8)
+            setPadding(0, 0, 0, 0)
         }
 
         val activeHeaderRow = LinearLayout(this).apply {
@@ -545,7 +545,7 @@ class MainActivity : AppCompatActivity() {
         val activeAllLabel = TextView(this).apply {
             text = "All:"
             textSize = 12f
-            setPadding(0, 24, dpToPx(6), 8)
+            setPadding(0, 0, dpToPx(6), 0)
         }
 
         val activeMuteButton = Button(this).apply {
@@ -559,7 +559,7 @@ class MainActivity : AppCompatActivity() {
                 updateActiveApps()
                 PlaybackControllerService.requestReapply(this@MainActivity)
             }
-        }
+        }.also { styleMainButton(it) }
 
         val activeHalfButton = Button(this).apply {
             text = "50%"
@@ -572,7 +572,7 @@ class MainActivity : AppCompatActivity() {
                 updateActiveApps()
                 PlaybackControllerService.requestReapply(this@MainActivity)
             }
-        }
+        }.also { styleMainButton(it) }
 
         val activeLoudButton = Button(this).apply {
             text = "100%"
@@ -585,13 +585,25 @@ class MainActivity : AppCompatActivity() {
                 updateActiveApps()
                 PlaybackControllerService.requestReapply(this@MainActivity)
             }
-        }
+        }.also { styleMainButton(it) }
 
         activeHeaderRow.addView(activeTitle)
         activeHeaderRow.addView(activeAllLabel)
         activeHeaderRow.addView(activeMuteButton)
-        activeHeaderRow.addView(activeHalfButton)
-        activeHeaderRow.addView(activeLoudButton)
+        activeHeaderRow.addView(
+            activeHalfButton,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginStart = dpToPx(4) }
+        )
+        activeHeaderRow.addView(
+            activeLoudButton,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { marginStart = dpToPx(4) }
+        )
 
         activeContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -600,7 +612,7 @@ class MainActivity : AppCompatActivity() {
         presetTitle = TextView(this).apply {
             text = "Saved volumes"
             textSize = 16f
-            setPadding(0, 24, 0, 8)
+            setPadding(0, 20, 0, 8)
         }
 
         manageAppsButton = Button(this).apply {
@@ -644,54 +656,51 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
         }
 
-        root.addView(header)
-        root.addView(quickStart)
-        root.addView(moduleHelpButton)
-        root.addView(controlStatusView)
-        root.addView(profileRow)
-        root.addView(refreshButton)
-        root.addView(resetButton)
-        root.addView(diagnosticsButton)
-        root.addView(bluetoothPermissionButton)
-        root.addView(helpButton)
-        root.addView(checkButton)
-        root.addView(notificationTitle)
-        root.addView(notificationPresentationSpinner)
-        root.addView(notificationPresentationHint)
-        root.addView(overlayTitle)
-        root.addView(overlayStatusView)
-        root.addView(overlayPermissionButton)
-        root.addView(accessibilityStatusView)
-        root.addView(accessibilityWarningView)
-        root.addView(accessibilityButton)
-        root.addView(overlayShowButton)
-        root.addView(overlayToggle)
-        root.addView(overlayAutoToggle)
-        root.addView(overlayAutoHideToggle)
-        root.addView(overlayDismissOutsideToggle)
-        root.addView(overlayOnlyWhenPlayingToggle)
-        root.addView(overlayRootFallbackToggle)
-        root.addView(overlayRootFallbackHint)
-        root.addView(overlayRootFallbackRefreshButton)
-        root.addView(overlayFocusBlockButton)
-        root.addView(overlayIgnoreButton)
-        root.addView(overlaySnoozeStatusView)
-        root.addView(overlaySnoozeButton)
-        root.addView(audioSettingsTitle)
-        root.addView(audioSettingsHint)
-        root.addView(defaultMuteToggle)
-        root.addView(autoResumeToggle)
-        root.addView(reduceEffectsToggle)
-        root.addView(lastUpdatedView)
-        root.addView(activeHeaderRow)
-        root.addView(activeContainer)
-        root.addView(presetTitle)
-        root.addView(manageAppsButton)
-        root.addView(rulesButton)
-        root.addView(outputOnlyToggle)
-        root.addView(presetSearch)
-        root.addView(clearFilterButton)
-        root.addView(presetContainer)
+        root.addControl(header, topDp = 0)
+        root.addControl(quickStart)
+        root.addControl(styleMainButton(moduleHelpButton))
+        root.addControl(controlStatusView)
+        root.addControl(profileRow)
+        root.addControl(buttonRow(refreshButton, resetButton))
+        root.addControl(styleMainButton(diagnosticsButton))
+        root.addControl(styleMainButton(bluetoothPermissionButton))
+        root.addControl(buttonRow(helpButton, checkButton))
+        root.addControl(notificationTitle, topDp = 0, bottomDp = 8)
+        root.addControl(notificationPresentationSpinner)
+        root.addControl(notificationPresentationHint, topDp = 4)
+        root.addControl(overlayTitle, topDp = 0, bottomDp = 8)
+        root.addControl(overlayStatusView)
+        root.addControl(styleMainButton(overlayPermissionButton))
+        root.addControl(accessibilityStatusView)
+        root.addControl(accessibilityWarningView)
+        root.addControl(styleMainButton(accessibilityButton))
+        root.addControl(styleMainButton(overlayShowButton))
+        root.addControl(styleMainCheckBox(overlayToggle))
+        root.addControl(styleMainCheckBox(overlayAutoToggle))
+        root.addControl(styleMainCheckBox(overlayAutoHideToggle))
+        root.addControl(styleMainCheckBox(overlayDismissOutsideToggle))
+        root.addControl(styleMainCheckBox(overlayOnlyWhenPlayingToggle))
+        root.addControl(styleMainCheckBox(overlayRootFallbackToggle))
+        root.addControl(overlayRootFallbackHint, topDp = 4)
+        root.addControl(styleMainButton(overlayRootFallbackRefreshButton))
+        root.addControl(styleMainButton(overlayFocusBlockButton))
+        root.addControl(styleMainButton(overlayIgnoreButton))
+        root.addControl(overlaySnoozeStatusView)
+        root.addControl(styleMainButton(overlaySnoozeButton))
+        root.addControl(audioSettingsTitle, topDp = 0, bottomDp = 8)
+        root.addControl(audioSettingsHint)
+        root.addControl(styleMainCheckBox(defaultMuteToggle))
+        root.addControl(styleMainCheckBox(autoResumeToggle))
+        root.addControl(styleMainCheckBox(reduceEffectsToggle))
+        root.addControl(lastUpdatedView)
+        root.addControl(activeHeaderRow, topDp = 20)
+        root.addControl(activeContainer)
+        root.addControl(presetTitle, topDp = 20, bottomDp = 8)
+        root.addControl(buttonRow(manageAppsButton, rulesButton))
+        root.addControl(styleMainCheckBox(outputOnlyToggle))
+        root.addControl(presetSearch)
+        root.addControl(styleMainButton(clearFilterButton))
+        root.addControl(presetContainer)
 
         val scroll = ScrollView(this).apply {
             addView(root)
@@ -1358,6 +1367,54 @@ class MainActivity : AppCompatActivity() {
 
     private fun dpToPx(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
+    }
+
+    /** Main-screen button styling: 48dp min touch height, wrap_content height so
+     *  text is never clipped, 16dp horizontal / 8dp vertical padding, sentence
+     *  case (no forced all-caps) and two-line wrapping instead of truncation. */
+    private fun styleMainButton(button: Button): Button {
+        button.minHeight = dpToPx(48)
+        button.isAllCaps = false
+        button.maxLines = 2
+        button.ellipsize = TextUtils.TruncateAt.END
+        button.setPadding(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(8))
+        return button
+    }
+
+    /** Main-screen checkbox/switch rows get the same 48dp touch height + padding. */
+    private fun styleMainCheckBox(checkBox: CheckBox): CheckBox {
+        checkBox.minHeight = dpToPx(48)
+        checkBox.setPadding(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(8))
+        return checkBox
+    }
+
+    /** Adds a control to the vertical main-screen stack: match-parent width,
+     *  wrap_content height (never fixed), with 8dp breathing room on top. */
+    private fun LinearLayout.addControl(view: View, topDp: Int = 8, bottomDp: Int = 0) {
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = dpToPx(topDp)
+            bottomMargin = dpToPx(bottomDp)
+        }
+        view.layoutParams = lp
+        addView(view)
+    }
+
+    /** Builds a horizontal row of equal-weight buttons with 8dp between them. */
+    private fun buttonRow(vararg buttons: Button): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        for ((index, button) in buttons.withIndex()) {
+            styleMainButton(button)
+            val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            if (index > 0) lp.marginStart = dpToPx(8)
+            row.addView(button, lp)
+        }
+        return row
     }
 
     private fun applyVolume(entry: AppEntry, progress: Int, valueView: TextView) {
