@@ -45,6 +45,7 @@ class RulesActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
+            applyGlass(28f)
         }
 
         val header = TextView(this).apply {
@@ -180,7 +181,7 @@ class RulesActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
-        applyEdgeToEdge(scroll)
+        applyLiquidBackground(scroll)
         refresh()
     }
 
@@ -218,18 +219,24 @@ class RulesActivity : AppCompatActivity() {
         }
     }
 
+    private fun dpToPx(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
+    }
+
     private fun buildEmptyRow(message: String): View {
         return TextView(this).apply {
             text = message
             textSize = 13f
-            setPadding(0, 4, 0, 4)
+            setPadding(dpToPx(16), dpToPx(8), dpToPx(16), dpToPx(8))
+            applyGlass(20f)
         }
     }
 
     private fun buildGroupRow(group: RuleGroup): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 8, 0, 8)
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8))
+            applyGlass(20f)
         }
         val name = TextView(this).apply {
             text = group.name
@@ -268,7 +275,8 @@ class RulesActivity : AppCompatActivity() {
     private fun buildRuleRow(rule: Rule): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 8, 0, 8)
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8))
+            applyGlass(20f)
         }
         val headerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -321,7 +329,8 @@ class RulesActivity : AppCompatActivity() {
     private fun buildLocationRow(location: fuck.individualappaudiovolumecontrol.droidvendorssuck.core.LocationRuleStore.LocationRule): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 8, 0, 8)
+            setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8))
+            applyGlass(20f)
         }
         val name = TextView(this).apply {
             text = location.id
