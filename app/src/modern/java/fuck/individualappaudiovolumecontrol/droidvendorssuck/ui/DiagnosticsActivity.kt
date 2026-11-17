@@ -29,6 +29,7 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ForegroundAppR
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.HiddenApi
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.PlaybackUtils
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.OverlayPrefs
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.SecureSettings
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.SetupStatus
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AudioSettingsPrefs
@@ -50,6 +51,7 @@ class DiagnosticsActivity : AppCompatActivity() {
     private var lastReportLines: List<String> = emptyList()
     private lateinit var volumeStore: VolumeStore
     private lateinit var bluetoothPermissionButton: Button
+    private lateinit var secureSettingsButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,6 +120,11 @@ class DiagnosticsActivity : AppCompatActivity() {
                 Toast.makeText(this@DiagnosticsActivity, "Hidden API attempt recorded", Toast.LENGTH_SHORT).show()
                 refresh()
             }
+        }
+
+        secureSettingsButton = Button(this).apply {
+            text = "Grant WRITE_SECURE_SETTINGS"
+            setOnClickListener { handleSecureSettingsButton() }
         }
 
         bluetoothPermissionButton = Button(this).apply {
@@ -196,6 +203,7 @@ class DiagnosticsActivity : AppCompatActivity() {
         root.addView(selfTestButton)
         root.addView(crossProfileProbeButton)
         root.addView(hiddenApiButton)
+        root.addView(secureSettingsButton)
         root.addView(bluetoothPermissionButton)
         root.addView(copyButton)
         root.addView(copyCompatibilityButton)
@@ -267,6 +275,7 @@ class DiagnosticsActivity : AppCompatActivity() {
             true
         }
         updateBluetoothButton(hasBluetoothConnect)
+        updateSecureSettingsButton()
         val hasModifyRouting = checkSelfPermission(PERMISSION_MODIFY_AUDIO_ROUTING) ==
             PackageManager.PERMISSION_GRANTED
         val hasQueryAllPackages = checkSelfPermission(Manifest.permission.QUERY_ALL_PACKAGES) ==
@@ -560,6 +569,50 @@ class DiagnosticsActivity : AppCompatActivity() {
         } else {
             "Grant Bluetooth permission"
         }
+    }
+
+    private fun updateSecureSettingsButton() {
+        val granted = SecureSettings.isGranted(this)
+        secureSettingsButton.isEnabled = !granted
+        secureSettingsButton.text = if (granted) {
+            "WRITE_SECURE_SETTINGS granted"
+        } else {
+            "Grant WRITE_SECURE_SETTINGS"
+        }
+    }
+
+    private fun handleSecureSettingsButton() {
+        if (SecureSettings.isGranted(this)) {
+            Toast.makeText(this, "WRITE_SECURE_SETTINGS already granted", Toast.LENGTH_SHORT).show()
+            refresh()
+            return
+        }
+        // Best-effort root grant (the device is Magisk-rooted). On success the Magisk
+        // prompt grants it; otherwise fall back to the module guidance dialog.
+        SecureSettings.tryGrantViaRoot(this) { granted ->
+            runOnUiThread {
+                if (granted) {
+                    Toast.makeText(this@DiagnosticsActivity, "WRITE_SECURE_SETTINGS granted", Toast.LENGTH_SHORT).show()
+                } else {
+                    showSecureSettingsDialog()
+                }
+                refresh()
+            }
+        }
+    }
+
+    private fun showSecureSettingsDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("WRITE_SECURE_SETTINGS")
+            .setMessage(
+                "This privileged permission has no system settings page and does not appear " +
+                    "in App info. It is granted at boot by the Magisk module (privapp allowlist " +
+                    "+ pm grant).\n\n" +
+                    "Re-flash the updated module zip and reboot; it will then show as granted here."
+            )
+            .setPositiveButton("Copy report") { _, _ -> copyReport() }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun requestBluetoothPermission() {

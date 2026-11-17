@@ -27,6 +27,7 @@ TAG="IndividualAppAudioVolumeControl"
 PERMS="
 android.permission.INTERACT_ACROSS_USERS
 android.permission.INTERACT_ACROSS_USERS_FULL
+android.permission.WRITE_SECURE_SETTINGS
 "
 
 wait_for_boot() {

@@ -16,6 +16,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.R
@@ -23,6 +24,7 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AccessibilityU
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.DiagnosticsStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ForegroundAppResolver
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.PlaybackUtils
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.SecureSettings
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.SetupStatus
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.service.VolumeKeyAccessibilityService
 import java.text.SimpleDateFormat
@@ -40,6 +42,7 @@ class SetupCheckActivity : AppCompatActivity() {
     private lateinit var overlayPermissionButton: Button
     private lateinit var accessibilityButton: Button
     private lateinit var usageAccessButton: Button
+    private lateinit var secureSettingsButton: Button
     private var lastReport: String = ""
     private var lastReportLines: List<String> = emptyList()
     private val refreshInProgress = AtomicBoolean(false)
@@ -123,6 +126,11 @@ class SetupCheckActivity : AppCompatActivity() {
             setOnClickListener { openUsageAccessSettings() }
         }
 
+        secureSettingsButton = Button(this).apply {
+            text = "Grant WRITE_SECURE_SETTINGS"
+            setOnClickListener { handleSecureSettingsButton() }
+        }
+
         val copyButton = Button(this).apply {
             text = "Copy report"
             setOnClickListener { copyReport() }
@@ -147,6 +155,7 @@ class SetupCheckActivity : AppCompatActivity() {
         root.addView(overlayPermissionButton)
         root.addView(accessibilityButton)
         root.addView(usageAccessButton)
+        root.addView(secureSettingsButton)
         root.addView(copyButton)
         root.addView(diagnosticsButton)
         root.addView(contentView)
@@ -244,6 +253,12 @@ class SetupCheckActivity : AppCompatActivity() {
                 } else {
                     "Grant usage access"
                 }
+                secureSettingsButton.isEnabled = !data.hasWriteSecureSettings
+                secureSettingsButton.text = if (data.hasWriteSecureSettings) {
+                    "WRITE_SECURE_SETTINGS granted"
+                } else {
+                    "Grant WRITE_SECURE_SETTINGS"
+                }
 
                 val ready = isPrivApp && data.hasModifyAudio && data.hiddenApiOk
                 val readyLine = if (ready) {
@@ -265,6 +280,7 @@ class SetupCheckActivity : AppCompatActivity() {
                         isSystemApp,
                         isPrivApp,
                         data.hasModifyAudio,
+                        data.hasWriteSecureSettings,
                         data.hiddenApiOk,
                         data.canDrawOverlays,
                         data.accessibilityEnabled,
@@ -317,6 +333,7 @@ class SetupCheckActivity : AppCompatActivity() {
         isSystemApp: Boolean,
         isPrivApp: Boolean,
         hasModifyAudio: Boolean,
+        hasWriteSecureSettings: Boolean,
         hiddenApiOk: Boolean,
         canDrawOverlays: Boolean,
         accessibilityEnabled: Boolean,
@@ -329,6 +346,9 @@ class SetupCheckActivity : AppCompatActivity() {
         }
         if (!hasModifyAudio) {
             steps.add("Check the privapp permissions file is applied.")
+        }
+        if (!hasWriteSecureSettings) {
+            steps.add("WRITE_SECURE_SETTINGS is granted by the module at boot (privapp allowlist + pm grant). Re-flash the updated module and reboot, or tap the Grant WRITE_SECURE_SETTINGS button (root).")
         }
         if (!hiddenApiOk) {
             steps.add("Open Diagnostics and try the self-test.")
@@ -377,6 +397,40 @@ class SetupCheckActivity : AppCompatActivity() {
         } catch (_: Exception) {
             startActivity(Intent(Settings.ACTION_SETTINGS))
         }
+    }
+
+    private fun handleSecureSettingsButton() {
+        if (SecureSettings.isGranted(this)) {
+            Toast.makeText(this, "WRITE_SECURE_SETTINGS already granted", Toast.LENGTH_SHORT).show()
+            refresh()
+            return
+        }
+        // Best-effort root grant (the device is Magisk-rooted). On success the Magisk
+        // prompt grants it; otherwise fall back to the module guidance dialog.
+        SecureSettings.tryGrantViaRoot(this) { granted ->
+            runOnUiThread {
+                if (granted) {
+                    Toast.makeText(this@SetupCheckActivity, "WRITE_SECURE_SETTINGS granted", Toast.LENGTH_SHORT).show()
+                } else {
+                    showSecureSettingsDialog()
+                }
+                refresh()
+            }
+        }
+    }
+
+    private fun showSecureSettingsDialog() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("WRITE_SECURE_SETTINGS")
+            .setMessage(
+                "This privileged permission has no system settings page and does not appear " +
+                    "in App info. It is granted at boot by the Magisk module (privapp allowlist " +
+                    "+ pm grant).\n\n" +
+                    "Re-flash the updated module zip and reboot; it will then show as granted here."
+            )
+            .setPositiveButton("Copy report") { _, _ -> copyReport() }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun formatTime(value: Long): String {

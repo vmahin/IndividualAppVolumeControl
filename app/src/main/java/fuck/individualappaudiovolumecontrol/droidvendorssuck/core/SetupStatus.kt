@@ -31,8 +31,10 @@ object SetupStatus {
     fun privilegeInfo(appInfo: ApplicationInfo): PrivilegeInfo {
         val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
         val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-        val flagPrivileged = isFlagSet("FLAG_PRIVILEGED", appInfo.flags)
         val privateFlagPrivileged = isPrivateFlagSet(appInfo, "PRIVATE_FLAG_PRIVILEGED")
+        // FLAG_PRIVILEGED is not maintained on modern Android (privileged status lives in
+        // privateFlags as PRIVATE_FLAG_PRIVILEGED), so fall back to it to avoid a false "no".
+        val flagPrivileged = isFlagSet("FLAG_PRIVILEGED", appInfo.flags) || privateFlagPrivileged
         val isPrivileged = flagPrivileged || privateFlagPrivileged
         return PrivilegeInfo(
             isSystemApp = isSystemApp,
