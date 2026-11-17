@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Notification glass card: translucent dark frosted surface (readable over any
+    shade), 24dp rounded corners, thin light border. RemoteViews cannot blur, so
+    this is the plain semi-transparent glass fallback (the same style used when
+    "Reduce effects" is on).
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#CC0D1117" />
+    <stroke
+        android:width="1dp"
+        android:color="#4DFFFFFF" />
+    <corners android:radius="24dp" />
+</shape>
