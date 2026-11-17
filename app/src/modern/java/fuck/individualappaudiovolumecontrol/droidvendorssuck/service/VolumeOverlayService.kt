@@ -50,6 +50,9 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AppIconLoader
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.withBiggerThumb
 import android.widget.Toast
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.OutputLabelUtils
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AudioSettingsPrefs
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.ui.GlassPanelDrawable
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.ui.applyGlass
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.ui.OverlayPermissionActivity
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.ui.SeekBarTicksView
 import kotlin.math.abs
@@ -583,12 +586,8 @@ class VolumeOverlayService : Service() {
 
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(10), dpToPx(10), dpToPx(10), dpToPx(10))
-            background = GradientDrawable().apply {
-                setColor(OVERLAY_BG)
-                cornerRadius = dpToPx(10).toFloat()
-                setStroke(dpToPx(1), OVERLAY_BORDER)
-            }
+            setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10))
+            applyGlass(20f, fill = OVERLAY_GLASS_FILL)
         }
 
         val headerRow = LinearLayout(this).apply {
@@ -815,12 +814,8 @@ class VolumeOverlayService : Service() {
 
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(10), dpToPx(10), dpToPx(10), dpToPx(10))
-            background = GradientDrawable().apply {
-                setColor(OVERLAY_BG)
-                cornerRadius = dpToPx(10).toFloat()
-                setStroke(dpToPx(1), OVERLAY_BORDER)
-            }
+            setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10))
+            applyGlass(20f, fill = OVERLAY_GLASS_FILL)
         }
 
         val headerRow = LinearLayout(this).apply {
@@ -1153,6 +1148,17 @@ class VolumeOverlayService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             y = dpToPx(32)
+            // Liquid glass: blur what is behind the overlay window (API 31+)
+            // unless the user enabled "Reduce effects". Some OEMs/ROMs ignore
+            // blur-behind for overlay windows, so this is best-effort only.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                !AudioSettingsPrefs(this@VolumeOverlayService).isReduceEffectsEnabled()
+            ) {
+                runCatching {
+                    flags = flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                    setBlurBehindRadius(dpToPx(24))
+                }
+            }
         }
     }
 
@@ -1272,11 +1278,12 @@ class VolumeOverlayService : Service() {
         private const val SNAP_THRESHOLD = 2
         private const val SNAP_DELTA_MAX = 2
         private const val SNAP_TIME_MIN_MS = 50L
-        private val OVERLAY_BG = Color.parseColor("#000000")
-        private val OVERLAY_BORDER = Color.parseColor("#FFFFFF")
         private val OVERLAY_TEXT = Color.parseColor("#FFFFFF")
         private val OVERLAY_ORANGE = Color.parseColor("#FF6A00")
         private val OVERLAY_TRACK = Color.parseColor("#303030")
+        // Dark glass fill for overlay cards: black ~55% alpha so white text keeps
+        // WCAG contrast over any backdrop (the old design used solid black).
+        private val OVERLAY_GLASS_FILL = Color.argb(0x8C, 0x00, 0x00, 0x00)
 
         private const val MENU_REFRESH = 1
         private const val MENU_AUTO_REFRESH = 2
