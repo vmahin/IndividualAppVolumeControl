@@ -155,7 +155,6 @@ class SetupCheckActivity : AppCompatActivity() {
             addView(root)
         }
 
-        setContentView(scroll)
         applyLiquidBackground(scroll)
         refresh()
     }

@@ -67,7 +67,6 @@ class OverlayPermissionActivity : AppCompatActivity() {
             addView(root)
         }
 
-        setContentView(scroll)
         applyLiquidBackground(scroll)
     }
 

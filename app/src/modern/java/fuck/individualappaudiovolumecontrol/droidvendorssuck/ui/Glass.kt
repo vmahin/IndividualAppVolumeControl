@@ -14,7 +14,9 @@ import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
@@ -261,27 +263,45 @@ fun View.applyGlass(
  *    the content (the blur layer stays full-bleed under the bars).
  */
 fun Activity.applyLiquidBackground(content: View) {
-    val useBlur = glassBlurEnabled(this)
+    // A caller may already have attached [content] via setContentView(...) before
+    // delegating to this helper. Re-parenting a view that still has a parent
+    // throws IllegalStateException ("The specified child already has a parent"),
+    // which crashed every screen on launch. Detach it first so this helper is
+    // safe no matter how it is called.
+    val existingParent = content.parent
+    if (existingParent is ViewGroup) {
+        existingParent.removeView(content)
+    }
+
     window.setBackgroundDrawable(LiquidGradientDrawable(this))
 
+    val useBlur = glassBlurEnabled(this)
     val wrapper = FrameLayout(this)
     if (useBlur) {
-        val blurLayer = View(this).apply {
-            background = LiquidGradientDrawable(this@applyLiquidBackground)
+        // Blur is best-effort: it must never crash the app. If RenderEffect /
+        // setRenderEffect is unavailable or fails on this device/ROM, fall back
+        // to the plain translucent surface (the "Reduce effects" default) and
+        // log the reason.
+        try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val radius = BLUR_RADIUS_DP * resources.displayMetrics.density
-                setRenderEffect(
-                    RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
+                val blurLayer = View(this).apply {
+                    background = LiquidGradientDrawable(this@applyLiquidBackground)
+                    setRenderEffect(
+                        RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
+                    )
+                }
+                wrapper.addView(
+                    blurLayer,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
                 )
             }
+        } catch (t: Throwable) {
+            Log.w("LiquidGlass", "In-app blur unavailable; using plain glass surface", t)
         }
-        wrapper.addView(
-            blurLayer,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
     }
     wrapper.addView(
         content,

@@ -203,7 +203,6 @@ class ManageAppsActivity : AppCompatActivity() {
             addView(root)
         }
 
-        setContentView(scroll)
         applyLiquidBackground(scroll)
         updateProfileOptions()
         updateProfileHint()

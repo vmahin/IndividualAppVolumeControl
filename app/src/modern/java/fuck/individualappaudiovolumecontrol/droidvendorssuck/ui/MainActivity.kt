@@ -697,7 +697,6 @@ class MainActivity : AppCompatActivity() {
             addView(root)
         }
 
-        setContentView(scroll)
         applyLiquidBackground(scroll)
 
         startForegroundService(Intent(this, PlaybackControllerService::class.java))

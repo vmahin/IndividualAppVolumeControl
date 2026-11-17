@@ -180,7 +180,6 @@ class RulesActivity : AppCompatActivity() {
             addView(root)
         }
 
-        setContentView(scroll)
         applyLiquidBackground(scroll)
         refresh()
     }
