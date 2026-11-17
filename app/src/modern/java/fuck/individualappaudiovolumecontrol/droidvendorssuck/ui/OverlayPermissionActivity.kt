@@ -23,6 +23,7 @@ class OverlayPermissionActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
+            applyGlass(28f)
         }
 
         val header = TextView(this).apply {
@@ -67,7 +68,7 @@ class OverlayPermissionActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
-        applyEdgeToEdge(scroll)
+        applyLiquidBackground(scroll)
     }
 
     override fun onResume() {
