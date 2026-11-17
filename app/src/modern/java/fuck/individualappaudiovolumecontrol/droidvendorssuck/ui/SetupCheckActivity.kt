@@ -17,6 +17,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.R
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AccessibilityUtils
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.DiagnosticsStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ForegroundAppResolver
@@ -61,6 +63,7 @@ class SetupCheckActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
+            applyGlass(28f)
         }
 
         val header = TextView(this).apply {
@@ -153,7 +156,7 @@ class SetupCheckActivity : AppCompatActivity() {
         }
 
         setContentView(scroll)
-        applyEdgeToEdge(scroll)
+        applyLiquidBackground(scroll)
         refresh()
     }
 
@@ -162,7 +165,7 @@ class SetupCheckActivity : AppCompatActivity() {
             return
         }
         statusView.text = "Ready: checking..."
-        statusView.setTextColor(0xFF616161.toInt())
+        statusView.setTextColor(ContextCompat.getColor(this, R.color.secondary_text))
 
         thread(name = "SetupCheckRefresh") {
             val result = runCatching {
@@ -213,7 +216,7 @@ class SetupCheckActivity : AppCompatActivity() {
                 }
                 if (result.isFailure) {
                     statusView.text = "Ready: check failed"
-                    statusView.setTextColor(0xFFB71C1C.toInt())
+                    statusView.setTextColor(ContextCompat.getColor(this@SetupCheckActivity, R.color.warning))
                     fixView.text = result.exceptionOrNull()?.message ?: "Unknown error"
                     refreshInProgress.set(false)
                     return@runOnUiThread
@@ -250,7 +253,12 @@ class SetupCheckActivity : AppCompatActivity() {
                     "Ready: NO (see checklist below)"
                 }
                 statusView.text = readyLine
-                statusView.setTextColor(if (ready) 0xFF1B5E20.toInt() else 0xFFB71C1C.toInt())
+                statusView.setTextColor(
+                    ContextCompat.getColor(
+                        this@SetupCheckActivity,
+                        if (ready) R.color.success else R.color.warning
+                    )
+                )
                 fixView.text = if (ready) {
                     "Great! You can control per-app volume now."
                 } else {
