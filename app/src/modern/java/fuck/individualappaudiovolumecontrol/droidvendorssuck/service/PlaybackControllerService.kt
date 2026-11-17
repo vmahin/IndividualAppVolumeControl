@@ -12,6 +12,7 @@ import android.media.AudioManager
 import android.media.AudioPlaybackConfiguration
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import android.content.pm.ServiceInfo
 import android.app.PendingIntent
@@ -25,12 +26,16 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.HiddenApi
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.PlaybackUtils
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.RulesEngine
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeStore
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeUiState
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.LocationRuleStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.LocationRuleManager
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AudioSettingsPrefs
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.NotificationPrefs
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.OverlayPrefs
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ProfileUtils
+import java.util.concurrent.Executors
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Suppress("DEPRECATION")
 class PlaybackControllerService : Service() {
@@ -43,6 +48,13 @@ class PlaybackControllerService : Service() {
     private val locationRuleStore by lazy { LocationRuleStore(this) }
     private val locationRuleManager by lazy { LocationRuleManager(this) }
     private val lastApplied = mutableMapOf<String, Float>()
+    private val lastRealByKey = mutableMapOf<String, Float>()
+    private val applyExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "VolApply").apply { isDaemon = true }
+    }
+    private val applyLock = Any()
+    private var applyRunning = false
+    private var pendingReapply = false
     private var lastNotifiedCount: Int = -1
     private var lastNotificationEntries: List<NotificationEntry> = emptyList()
     private var lastNotificationSignature: String? = null
@@ -59,13 +71,7 @@ class PlaybackControllerService : Service() {
     private val playbackCallback = object : AudioManager.AudioPlaybackCallback() {
         override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
             if (configs == null) return
-            if (PlaybackUtils.hasAcrossUsersPermission(this@PlaybackControllerService)) {
-                safeApplyVolumes(
-                    PlaybackUtils.getActivePlaybackConfigurationsSafe(this@PlaybackControllerService, diagnosticsStore)
-                )
-            } else {
-                safeApplyVolumes(configs)
-            }
+            scheduleApply()
         }
     }
 
@@ -87,10 +93,11 @@ class PlaybackControllerService : Service() {
         }
         audioManager.registerAudioPlaybackCallback(playbackCallback, null)
         setupCallStateListener()
-        safeApplyVolumes(PlaybackUtils.getActivePlaybackConfigurationsSafe(this, diagnosticsStore))
+        scheduleApply()
     }
 
     override fun onDestroy() {
+        applyExecutor.shutdown()
         cancelPerAppNotifications()
         locationRuleManager.stop()
         teardownCallStateListener()
@@ -110,9 +117,7 @@ class PlaybackControllerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_REAPPLY -> safeApplyVolumes(
-                PlaybackUtils.getActivePlaybackConfigurationsSafe(this, diagnosticsStore)
-            )
+            ACTION_REAPPLY -> scheduleApply()
             ACTION_DIAGNOSTICS_DUMP -> dumpActiveConfigs()
             ACTION_CROSS_PROFILE_PROBE -> {
                 PlaybackUtils.getActivePlaybackConfigurationsSafe(this, diagnosticsStore)
@@ -200,16 +205,52 @@ class PlaybackControllerService : Service() {
             }
             activeKeys.add(key)
             val current = lastApplied[key]
-            if (current != null && current == desiredVolume) continue
+            if (current != null && current == desiredVolume) {
+                // Only skip when the real volume was also verified to match: the
+                // app may have changed its own volume since our last apply, and a
+                // blind skip would leave the real volume wrong while the sliders
+                // show the stored target (slider moves, nothing audible changes).
+                val lastReal = lastRealByKey[key]
+                if (lastReal != null && abs(lastReal - desiredVolume) <= VOLUME_EPSILON) continue
+            }
 
+            val applyStart = SystemClock.elapsedRealtime()
             val applied = PlaybackUtils.applyVolumeToPlayer(entry.config, desiredVolume)
             applyAttempted += 1
+            val requestedPct = (desiredVolume * 100).roundToInt()
             if (applied) {
                 lastApplied[key] = desiredVolume
                 appliedCount += 1
+                val real = PlaybackUtils.readPlayerVolume(entry.config)
+                if (real != null) {
+                    lastRealByKey[key] = real
+                    val realPct = (real * 100).roundToInt()
+                    VolumeUiState.setRealPercent(volumeKey.storageKey(), realPct)
+                    if (abs(real - desiredVolume) > VOLUME_EPSILON) {
+                        val msg = "app=$packageName requested=$requestedPct% real=$realPct%"
+                        Log.w(TAG_VOL_SLIDER, "readback mismatch $msg")
+                        diagnosticsStore.recordVolumeApplyIssue("readback mismatch: $msg")
+                    }
+                } else {
+                    // Read-back unavailable (API < 33): the player accepted the
+                    // value synchronously, so trust it so the lastApplied skip
+                    // keeps working on older Android versions.
+                    lastRealByKey[key] = desiredVolume
+                }
+                Log.d(
+                    TAG_VOL_SLIDER,
+                    "apply app=$packageName requested=$requestedPct% result=ok timeMs=" +
+                        (SystemClock.elapsedRealtime() - applyStart)
+                )
             } else {
                 applyFailed += 1
                 Log.w(TAG, "Failed to apply volume for $packageName")
+                Log.w(
+                    TAG_VOL_SLIDER,
+                    "apply app=$packageName requested=$requestedPct% result=failed timeMs=" +
+                        (SystemClock.elapsedRealtime() - applyStart)
+                )
+                diagnosticsStore.recordVolumeApplyIssue("apply failed: app=$packageName requested=$requestedPct%")
             }
 
             val shouldPause = pauseTargets.contains(volumeKey) ||
@@ -272,6 +313,7 @@ class PlaybackControllerService : Service() {
             }
         }
         lastApplied.keys.retainAll(activeKeys)
+        lastRealByKey.keys.retainAll(activeKeys)
         lastPausedKeys.retainAll(pauseAppliedKeys)
         diagnosticsStore.recordLastApply(appliedCount)
         val usersSummary = if (userCounts.isEmpty()) {
@@ -323,6 +365,56 @@ class PlaybackControllerService : Service() {
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to apply volumes", t)
             diagnosticsStore.recordLastError(t.javaClass.simpleName + ": " + (t.message ?: "unknown"))
+        }
+    }
+
+    /**
+     * Runs [applyVolumes] on a dedicated worker thread with "latest value wins"
+     * coalescing so rapid slider drags never pile work onto the main thread and
+     * the final value is never dropped:
+     *
+     *  - At most one apply runs at a time.
+     *  - Any request arriving while an apply is in flight only sets a pending
+     *    flag; when the running apply finishes, the loop re-runs once and reads
+     *    the LATEST stored values (so the last slider position always reaches
+     *    the player).
+     *  - The loop keeps re-running while requests keep arriving during a drag
+     *    (inherently rate-limited to one apply per apply-duration) and stops
+     *    once no request arrived during the final run — the final value has
+     *    then been applied.
+     */
+    private fun scheduleApply() {
+        val startRun = synchronized(applyLock) {
+            if (applyRunning) {
+                pendingReapply = true
+                false
+            } else {
+                applyRunning = true
+                pendingReapply = false
+                true
+            }
+        }
+        if (!startRun) return
+        applyExecutor.execute {
+            try {
+                do {
+                    safeApplyVolumes(
+                        PlaybackUtils.getActivePlaybackConfigurationsSafe(this, diagnosticsStore)
+                    )
+                } while (synchronized(applyLock) {
+                    if (pendingReapply) {
+                        pendingReapply = false
+                        true
+                    } else {
+                        applyRunning = false
+                        false
+                    }
+                })
+            } catch (t: Throwable) {
+                synchronized(applyLock) { applyRunning = false }
+                Log.e(TAG, "Volume apply worker failed", t)
+                diagnosticsStore.recordLastError("Volume apply worker failed: ${t.javaClass.simpleName}")
+            }
         }
     }
 
@@ -866,12 +958,14 @@ class PlaybackControllerService : Service() {
             state == TelephonyManager.CALL_STATE_OFFHOOK
         if (shouldMute != callMuteActive) {
             callMuteActive = shouldMute
-            safeApplyVolumes(PlaybackUtils.getActivePlaybackConfigurationsSafe(this, diagnosticsStore))
+            scheduleApply()
         }
     }
 
     companion object {
         private const val TAG = "PlaybackController"
+        private const val TAG_VOL_SLIDER = "VolSlider"
+        private const val VOLUME_EPSILON = 0.02f
         private const val CHANNEL_ID = "app_volume_control"
         private const val NOTIFICATION_ID = 1001
         const val ACTION_REAPPLY = "fuck.individualappaudiovolumecontrol.droidvendorssuck.action.REAPPLY"

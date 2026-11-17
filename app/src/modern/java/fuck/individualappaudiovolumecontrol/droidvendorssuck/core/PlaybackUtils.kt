@@ -107,6 +107,12 @@ object PlaybackUtils {
         }.getInt(null)
     }
 
+    private val playerVolumeMethod = HiddenMethodResolver("AudioPlaybackConfiguration.getVolume") {
+        AudioPlaybackConfiguration::class.java.getDeclaredMethod("getVolume").apply {
+            isAccessible = true
+        }
+    }
+
     private val userIdMethod = HiddenMethodResolver("UserHandle.getUserId") {
         android.os.UserHandle::class.java.getDeclaredMethod(
             "getUserId",
@@ -381,6 +387,24 @@ object PlaybackUtils {
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to set player volume", t)
             false
+        }
+    }
+
+    /**
+     * Reads back the real volume of a playback player (0..1) after an apply.
+     *
+     * Uses `AudioPlaybackConfiguration.getVolume()` (public API since Android 13 /
+     * API 33) via the same lazily-resolved reflection the rest of this file uses
+     * for version-gated members. On older API levels (or if the player does not
+     * expose a volume), the lookup is cached as unavailable and this returns
+     * null — callers treat null as "cannot verify" and skip the read-back check.
+     */
+    fun readPlayerVolume(config: AudioPlaybackConfiguration): Float? {
+        return try {
+            playerVolumeMethod.get()?.invoke(config) as? Float
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to read player volume", t)
+            null
         }
     }
 

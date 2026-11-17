@@ -47,7 +47,9 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.MarkerStyle
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.DiagnosticsStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.ForegroundAppResolver
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AppIconLoader
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeUiState
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.withBiggerThumb
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.consumeHorizontalDrags
 import android.widget.Toast
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.OutputLabelUtils
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AudioSettingsPrefs
@@ -92,7 +94,9 @@ class VolumeOverlayService : Service() {
             if (overlayView?.parent == null) return
             if (overlayPrefs.isAutoRefreshEnabled()) {
                 val signature = buildActiveSignature()
-                if (signature != activeSignature) {
+                // Skip the rebuild while a slider is being dragged so the touch
+                // is never canceled and no stale value is written back.
+                if (signature != activeSignature && !VolumeUiState.anyTouching()) {
                     activeSignature = signature
                     populateList()
                 }
@@ -266,7 +270,10 @@ class VolumeOverlayService : Service() {
         }
         if (overlayView?.parent != null) {
             val signature = buildActiveSignature()
-            if (signature != activeSignature) {
+            // Skip the rebuild while a slider is being dragged so the touch is
+            // never canceled and no stale value is written back. The signature
+            // is left unchanged so a later event re-checks and catches up.
+            if (signature != activeSignature && !VolumeUiState.anyTouching()) {
                 activeSignature = signature
                 populateList()
             }
@@ -671,8 +678,15 @@ class VolumeOverlayService : Service() {
 
         val rowControlsEnabled = controlsEnabled && !entry.isRootDetected
         val stored = volumeStore.getVolume(entry.key) ?: 1f
+        // Prefer the last read-back real volume over the stored target so the
+        // overlay never silently disagrees with the actual player volume.
+        val shownPercent = if (rowControlsEnabled) {
+            VolumeUiState.realPercentOrNull(entry.key.storageKey()) ?: (stored * 100).toInt()
+        } else {
+            (stored * 100).toInt()
+        }
         val valueView = TextView(this).apply {
-            text = "${(stored * 100).toInt()}%"
+            text = "$shownPercent%"
             textSize = 11f
             setPadding(0, 0, dpToPx(6), 0)
         }
@@ -688,7 +702,7 @@ class VolumeOverlayService : Service() {
             }
         }
 
-        updateMuteIcon(muteButton, stored)
+        updateMuteIcon(muteButton, shownPercent / 100f)
         muteButton.setOnClickListener {
             if (!rowControlsEnabled) return@setOnClickListener
             val currentVolume = volumeStore.getVolume(entry.key) ?: 1f
@@ -740,14 +754,15 @@ class VolumeOverlayService : Service() {
 
         slider = SeekBar(this).apply {
             max = 100
-            progress = (stored * 100).toInt()
+            progress = shownPercent
             isEnabled = rowControlsEnabled
+            minHeight = dpToPx(48)
             progressTintList = ColorStateList.valueOf(OVERLAY_ORANGE)
             thumbTintList = ColorStateList.valueOf(OVERLAY_ORANGE)
             progressBackgroundTintList = ColorStateList.valueOf(OVERLAY_TRACK)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                dpToPx(44),
+                dpToPx(48),
                 Gravity.CENTER_VERTICAL
             )
             withBiggerThumb(1.35f)
@@ -787,14 +802,20 @@ class VolumeOverlayService : Service() {
 
                 override fun onStartTrackingTouch(seekBar: SeekBar?) {
                     if (!rowControlsEnabled) return
+                    VolumeUiState.setTouching(entry.key.storageKey(), true)
                     scheduleHideIfEnabled()
                 }
 
                 override fun onStopTrackingTouch(seekBar: SeekBar?) {
                     if (!rowControlsEnabled) return
+                    VolumeUiState.setTouching(entry.key.storageKey(), false)
+                    // Guarantee the exact final value reaches the player even if
+                    // the last progress event was coalesced away.
+                    PlaybackControllerService.requestReapply(this@VolumeOverlayService)
                     scheduleHideIfEnabled()
                 }
             })
+            consumeHorizontalDrags()
         }
         ticksView.setPadding(slider.paddingLeft, 0, slider.paddingRight, 0)
 

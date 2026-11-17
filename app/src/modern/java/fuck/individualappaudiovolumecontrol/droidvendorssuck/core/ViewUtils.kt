@@ -10,6 +10,7 @@ import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
+import android.view.MotionEvent
 import android.widget.ImageView
 import android.widget.SeekBar
 import java.util.concurrent.Executors
@@ -65,6 +66,29 @@ object AppIconLoader {
 fun SeekBar.withBiggerThumb(scale: Float): SeekBar {
     val original = thumb ?: return this
     thumb = ScaledThumbDrawable(original, scale)
+    return this
+}
+
+/**
+ * Makes a SeekBar consume horizontal drags so a scrolling parent (the main
+ * screen's ScrollView) never steals the gesture: on touch-down the whole
+ * ancestor chain is told not to intercept (propagated automatically through
+ * [android.view.View.requestDisallowInterceptTouchEvent]), and interception is
+ * re-allowed once the touch ends. Returns false from the touch listener so the
+ * SeekBar still handles the drag itself.
+ */
+fun SeekBar.consumeHorizontalDrags(): SeekBar {
+    setOnTouchListener { view, event ->
+        val parent = view.parent
+        if (parent != null) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> parent.requestDisallowInterceptTouchEvent(true)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    parent.requestDisallowInterceptTouchEvent(false)
+            }
+        }
+        false
+    }
     return this
 }
 

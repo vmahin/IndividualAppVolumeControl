@@ -54,7 +54,9 @@ import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.SetupStatus
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeStore
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AudioSettingsPrefs
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.AppIconLoader
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.VolumeUiState
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.withBiggerThumb
+import fuck.individualappaudiovolumecontrol.droidvendorssuck.core.consumeHorizontalDrags
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.service.PlaybackControllerService
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.service.VolumeOverlayService
 import fuck.individualappaudiovolumecontrol.droidvendorssuck.ui.SeekBarTicksView
@@ -131,6 +133,14 @@ class MainActivity : AppCompatActivity() {
             // refresh; stop the loop (the playback callback re-arms it when
             // playback starts).
             if (activeEntries.isEmpty()) return
+            // While a slider is being touched, skip the rebuild entirely: the
+            // refresh removes every row and would destroy the slider mid-drag
+            // (canceled touch) or write a stale value back into it. Re-arm the
+            // loop so the next tick picks up the change after the touch ends.
+            if (VolumeUiState.anyTouching()) {
+                handler.postDelayed(this, REFRESH_INTERVAL_MS)
+                return
+            }
             updateActiveApps()
             updateLastUpdated()
             handler.postDelayed(this, REFRESH_INTERVAL_MS)
@@ -140,8 +150,12 @@ class MainActivity : AppCompatActivity() {
     private val playbackCallback = object : AudioManager.AudioPlaybackCallback() {
         override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
             if (configs == null) return
-            updateActiveApps()
-            updateLastUpdated()
+            // Same mid-drag guard as the periodic refresh: don't rebuild rows
+            // (and cancel the touch) while the user is dragging a slider.
+            if (!VolumeUiState.anyTouching()) {
+                updateActiveApps()
+                updateLastUpdated()
+            }
             // Re-arm the periodic refresh while playback is present so volume
             // changes made from the notification or overlay also reach this list.
             if (activeEntries.isNotEmpty()) {
@@ -987,8 +1001,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         val stored = volumeStore.getVolume(entry.key) ?: 1f
+        // For active entries, prefer the last read-back real volume over the
+        // stored target: if an apply failed or the app changed its own volume,
+        // the slider shows reality instead of silently disagreeing with it.
+        val shownPercent = if (isActive) {
+            VolumeUiState.realPercentOrNull(entry.key.storageKey()) ?: (stored * 100).toInt()
+        } else {
+            (stored * 100).toInt()
+        }
         val valueView = TextView(this).apply {
-            text = "${(stored * 100).toInt()}%"
+            text = "$shownPercent%"
             textSize = 12f
             setPadding(dpToPx(8), 0, dpToPx(8), 0)
         }
@@ -1030,7 +1052,8 @@ class MainActivity : AppCompatActivity() {
 
         val slider = SeekBar(this).apply {
             max = 100
-            progress = (stored * 100).toInt()
+            progress = shownPercent
+            minHeight = dpToPx(48)
             var lastProgress = progress
             var lastChangeTime = SystemClock.elapsedRealtime()
             var ignoreNextProgrammatic = false
@@ -1060,15 +1083,23 @@ class MainActivity : AppCompatActivity() {
                     updateMuteIcon(progress / 100f)
                 }
 
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                    VolumeUiState.setTouching(entry.key.storageKey(), true)
+                }
 
-                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    VolumeUiState.setTouching(entry.key.storageKey(), false)
+                    // Guarantee the exact final value reaches the player even if
+                    // the last progress event was coalesced away.
+                    PlaybackControllerService.requestReapply(this@MainActivity)
+                }
             })
+            consumeHorizontalDrags()
         }
 
         sliderRef = slider
 
-        updateMuteIcon(stored)
+        updateMuteIcon(shownPercent / 100f)
 
         val sliderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

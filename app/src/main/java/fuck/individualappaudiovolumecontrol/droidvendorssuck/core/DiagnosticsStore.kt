@@ -247,6 +247,17 @@ class DiagnosticsStore(context: Context) {
         }
     }
 
+    /** Records the last per-app volume apply failure or read-back mismatch (fix 7: don't fail silently). */
+    fun recordVolumeApplyIssue(summary: String) {
+        val now = System.currentTimeMillis()
+        updateSnapshot {
+            copy(
+                lastVolumeApplyIssue = summary,
+                lastVolumeApplyIssueTime = now,
+            )
+        }
+    }
+
     fun snapshot(): DiagnosticsSnapshot {
         synchronized(cacheLock) {
             return ensureSnapshotLocked()
@@ -370,6 +381,8 @@ class DiagnosticsStore(context: Context) {
             crossProfileProbeTime = prefs.getLong(KEY_CROSS_PROFILE_PROBE_TIME, 0L),
             crossProfileApplySummary = prefs.getString(KEY_CROSS_PROFILE_APPLY_SUMMARY, null),
             crossProfileApplyTime = prefs.getLong(KEY_CROSS_PROFILE_APPLY_TIME, 0L),
+            lastVolumeApplyIssue = prefs.getString(KEY_VOLUME_APPLY_ISSUE, null),
+            lastVolumeApplyIssueTime = prefs.getLong(KEY_VOLUME_APPLY_ISSUE_TIME, 0L),
         )
     }
 
@@ -429,6 +442,8 @@ class DiagnosticsStore(context: Context) {
             .putLong(KEY_CROSS_PROFILE_PROBE_TIME, snapshot.crossProfileProbeTime)
             .putString(KEY_CROSS_PROFILE_APPLY_SUMMARY, snapshot.crossProfileApplySummary)
             .putLong(KEY_CROSS_PROFILE_APPLY_TIME, snapshot.crossProfileApplyTime)
+            .putString(KEY_VOLUME_APPLY_ISSUE, snapshot.lastVolumeApplyIssue)
+            .putLong(KEY_VOLUME_APPLY_ISSUE_TIME, snapshot.lastVolumeApplyIssueTime)
             .commit()
     }
 
@@ -487,6 +502,8 @@ class DiagnosticsStore(context: Context) {
         val crossProfileProbeTime: Long,
         val crossProfileApplySummary: String?,
         val crossProfileApplyTime: Long,
+        val lastVolumeApplyIssue: String?,
+        val lastVolumeApplyIssueTime: Long,
     )
 
     companion object {
@@ -557,6 +574,8 @@ class DiagnosticsStore(context: Context) {
         private const val KEY_CROSS_PROFILE_PROBE_TIME = "cross_profile_probe_time"
         private const val KEY_CROSS_PROFILE_APPLY_SUMMARY = "cross_profile_apply_summary"
         private const val KEY_CROSS_PROFILE_APPLY_TIME = "cross_profile_apply_time"
+        private const val KEY_VOLUME_APPLY_ISSUE = "volume_apply_issue"
+        private const val KEY_VOLUME_APPLY_ISSUE_TIME = "volume_apply_issue_time"
 
         const val OVERLAY_SIGNAL_OBSERVER = "observer"
         const val OVERLAY_SIGNAL_BROADCAST = "broadcast"

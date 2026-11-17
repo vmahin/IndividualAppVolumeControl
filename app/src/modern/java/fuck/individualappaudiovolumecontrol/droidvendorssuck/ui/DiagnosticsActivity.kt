@@ -250,6 +250,7 @@ class DiagnosticsActivity : AppCompatActivity() {
         val controllerNotificationPostTime = formatTime(snapshot.controllerNotificationPostTime, dateFormat)
         val crossProfileProbeTime = formatTime(snapshot.crossProfileProbeTime, dateFormat)
         val crossProfileApplyTime = formatTime(snapshot.crossProfileApplyTime, dateFormat)
+        val lastVolumeApplyIssueTime = formatTime(snapshot.lastVolumeApplyIssueTime, dateFormat)
 
         val hiddenApiPolicy = readGlobalInt("hidden_api_policy")
         val hiddenApiPolicyPreP = readGlobalInt("hidden_api_policy_pre_p_apps")
@@ -389,6 +390,8 @@ class DiagnosticsActivity : AppCompatActivity() {
             "Last error time: $lastErrorTime",
             "Last apply count: ${snapshot.lastApplyCount}",
             "Last apply time: $lastApplyTime",
+            "Volume apply issue: ${snapshot.lastVolumeApplyIssue ?: "-"}",
+            "Volume apply issue time: $lastVolumeApplyIssueTime",
             "Last routing time: $lastRouteTime",
             "Last routing attempted/applied/missing/failed: " +
                 "${snapshot.lastRouteAttempted}/${snapshot.lastRouteApplied}/" +
